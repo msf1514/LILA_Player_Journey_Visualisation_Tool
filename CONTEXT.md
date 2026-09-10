@@ -478,6 +478,22 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-10 — PHASE 0 COMPLETE (local)
+- **Q4 resolved: repo is PUBLIC** (revised D18). Reviewer usernames unobtainable; a private link 404s
+  for them. Privacy bought little anyway — the deployed site serves `bundle.bin` to the browser
+  regardless of repo visibility.
+- Scaffolded at `D:\Lila` (repo root): Vite 7.3.6 · React 19.3 · TypeScript 5.9.3 · deck.gl 9.4.0 ·
+  hyparquet 1.30.0 · vitest 3.2.7 · sharp 0.34.5. **`hysnappy` verified absent.**
+- Manual scaffold rather than `npm create vite` — avoids interactive prompts in a non-interactive
+  shell and keeps exact control of config.
+- Dirs: `src/{data,map,ui,state}`, `pipeline/`, `public/minimaps/`.
+- `.gitignore` (node_modules, dist, generated bundle + minimaps, the assignment PDF, tsbuildinfo) and
+  `.gitattributes` (LF normalisation, binary types incl. `*.nakama-0`).
+- Verified: `tsc -b` clean · `vite build` succeeds (222 KB → 69.5 KB gz shell).
+- `git init` + first commit `a62721f`, 1,259 files, .git = 29 MB.
+- **BLOCKED ON USER:** 0.1 create the GitHub repo (no `gh` CLI installed) and 0.6 connect Cloudflare Pages.
+- **Next: Phase 1 — `transform.mjs`, `build.mjs`, `minimaps.mjs`, 6 golden tests.**
+
 ### 2026-09-10 — Session 1 (cont. 2)
 - Created **`TASKS.md`** — full execution checklist: 14 phases, ~90 tasks, sizes, cut order, risk
   register, and LILA's own 13-point submission checklist. Every data gotcha is inlined at the task

@@ -1,6 +1,8 @@
 # TASKS.md — LILA Player Journey Tool · Master Checklist
 
-> Companion to `CONTEXT.md` (findings, decisions, architecture). This file is **execution only**.
+> One of three docs: **`CONTEXT.md`** = what we know & why (facts, decisions) · **`TASKS.md`** = what to do (this file) · **`BUILD_LOG.md`** = what we did & how we verified it.
+>
+> This file is **execution only**.
 > Tick items as they complete. Update status here + changelog in `CONTEXT.md` after each work block.
 >
 > **Status:** `TODO` · `WIP` · `DONE` (complete AND verified) · `CUT`
@@ -12,12 +14,12 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 0.1 | Create **PUBLIC** GitHub repo `lila-player-journeys` | S | Public per revised D18 — reviewer usernames unobtainable, and a private link 404s for them. `gh` CLI is **not installed**: user must create the repo on github.com, then we add the remote and push. README must note the data is LILA-supplied and UUID-anonymised. | `TODO` |
-| 0.2 | Scaffold Vite + React + TypeScript | S | `npm create vite@latest -- --template react-ts`. TS for the data layer where typed arrays and index maps get error-prone. | `TODO` |
-| 0.3 | Install deps | S | `deck.gl`, `hyparquet`. **DO NOT install `hysnappy`** — it throws `parquet decompressed page length 2 does not match header 40`. hyparquet's built-in Snappy works. Dev: `vitest`, `sharp` (minimap resize). | `TODO` |
-| 0.4 | Copy `player_data/` into repo | S | 8.37 MB, 1,243 files + 3 minimaps. Committed so the pipeline is reproducible by the reviewer (D14). | `TODO` |
-| 0.5 | `.gitignore` + npm scripts | S | Ignore `node_modules`, `dist`, `public/bundle.bin`, `public/minimaps/*.webp` (generated). Scripts: `build:data`, `build:maps`, `test`, `dev`, `build`. | `TODO` |
-| 0.6 | Connect Cloudflare Pages to the repo | S | Do this **now**, not at the end — verifies private-repo access and the build command early. Build: `npm run build`. Output: `dist`. | `TODO` |
+| 0.1 | Create **PUBLIC** GitHub repo | S | ✅ https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool — created by user (no `gh` CLI here). Public per revised D18. README must note the data is LILA-supplied and UUID-anonymised. | `DONE` |
+| 0.2 | Scaffold Vite + React + TypeScript | S | `npm create vite@latest -- --template react-ts`. TS for the data layer where typed arrays and index maps get error-prone. | `DONE` |
+| 0.3 | Install deps | S | `deck.gl`, `hyparquet`. **DO NOT install `hysnappy`** — it throws `parquet decompressed page length 2 does not match header 40`. hyparquet's built-in Snappy works. Dev: `vitest`, `sharp` (minimap resize). | `DONE` |
+| 0.4 | Copy `player_data/` into repo | S | 8.37 MB, 1,243 files + 3 minimaps. Committed so the pipeline is reproducible by the reviewer (D14). | `DONE` |
+| 0.5 | `.gitignore` + npm scripts | S | Ignore `node_modules`, `dist`, `public/bundle.bin`, `public/minimaps/*.webp` (generated). Scripts: `build:data`, `build:maps`, `test`, `dev`, `build`. | `DONE` |
+| 0.6 | Connect Cloudflare Pages to the repo | S | ✅ Linked by user. Build: `npm run build`, output `dist`. `prebuild` regenerates minimaps + bundle so a clean clone reproduces the deploy. | `DONE` |
 
 ---
 
