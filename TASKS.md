@@ -181,10 +181,10 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 12.1 | Cloudflare deploy | S | Deployed as a **Worker with Static Assets** (`lila-pjvt.msf1514.workers.dev`), not Pages. `wrangler.jsonc` committed so deploys are reproducible from a clean clone. | `WIP` |
-| 12.1a | **Continuous deployment on push** | S | The first deploy was manual, so pushes did not redeploy: the live site sat on Phase 0 code for three phases. Needs the Worker connected to the GitHub repo in the Cloudflare dashboard. | `TODO` |
-| 12.2 | Verify from a clean browser | S | Incognito, no cache, different machine if possible. **"Can we open it and use it without your help?"** is an explicit evaluation criterion. | `TODO` |
-| 12.3 | Check payload + load time | S | Target < 3s to interactive on a normal connection. Bundle is 1.04 MB gz. | `TODO` |
+| 12.1 | Cloudflare deploy | S | ✅ Live at **https://lila-pjvt.msf1514.workers.dev** as a Worker with Static Assets. `wrangler.jsonc` committed so deploys reproduce from a clean clone. | `DONE` |
+| 12.1a | **Continuous deployment on push** | S | ✅ Working. Build `d57bb47` succeeded in 90s and shipped the current bundle. Fixed by declaring `build.command` in `wrangler.jsonc` rather than in the dashboard, so it cannot silently break again. | `DONE` |
+| 12.2 | Verify from a clean browser | S | ✅ Playwright against the live URL: canvas present, all 3 maps render, zero console errors, `bundle.bin` serves as 2,136,384 B `application/octet-stream`, unknown paths 404 (no SPA fallback masking). | `DONE` |
+| 12.3 | Check payload + load time | M | ⚠️ **7.0s to interactive** against a < 3s target. Cause: deck.gl ships 973 KB JS (284 KB gz) plus the 2.1 MB `bundle.bin`. Needs code-splitting / lazy deck.gl import and possibly a smaller first-paint payload. Carried into Phase 10 polish. | `TODO` |
 | 12.4 | Verify deep links work in production | S | Paste a copied URL into a fresh browser; it must restore the exact view. | `TODO` |
 
 ---

@@ -54,7 +54,8 @@ produces a finding, a decision, a correction, code, or progress.
 **Project:** LILA Games — Product Engineer Written Test
 **Deliverable:** Player Journey Visualization Tool + hosted URL + 3 docs, in ONE GitHub repo
 **Deadline:** 5 days from receipt · **Effort budget:** no fixed hour cap (D19); deadline is the constraint
-**Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public) · Cloudflare Pages linked
+**Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public)
+**Live:** https://lila-pjvt.msf1514.workers.dev — Cloudflare Worker + Static Assets, auto-deploys on push to `main`
 **Phase:** **Phases 0–3 COMPLETE.** Pipeline, runtime and map canvas verified; 60 tests green; registration confirmed visually on all 3 maps.
 **Next action:** Phase 4 — data layers (traffic, dwell, loot, kills, deaths, dead space, paths)
 
@@ -64,7 +65,7 @@ Docs: `CONTEXT.md` (facts/decisions) · `TASKS.md` (checklist) · `BUILD_LOG.md`
 
 | Item | Status |
 |---|---|
-| Working tool, hosted, shareable link | `TODO` |
+| Working tool, hosted, shareable link | `WIP` — hosted and auto-deploying; tool itself is at Phase 3 |
 | `README.md` — stack, setup, env vars | `TODO` |
 | `ARCHITECTURE.md` — 1 page, incl. coordinate mapping walkthrough | `TODO` |
 | `INSIGHTS.md` — 3 insights w/ evidence + actionable metrics | `TODO` (content ready, see §9) |
@@ -486,6 +487,22 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-10 — DEPLOYMENT LIVE AND VERIFIED
+- **Live URL: https://lila-pjvt.msf1514.workers.dev** (Cloudflare Worker + Static Assets).
+- Found the live site had been serving **Phase 0 code for three phases** — deployed by hand
+  once, so GitHub pushes never redeployed. Caught by diffing the deployed JS hash against the
+  local build, not by HTTP status: the URL returned 200 the whole time.
+- First CI run failed in 0s (`assets.directory does not exist`): the dashboard had a deploy
+  command but an **empty build command**, so it deployed a `dist/` that was never built.
+  Fixed by declaring `build.command` in `wrangler.jsonc` — config in the repo, reviewable,
+  and immune to dashboard drift.
+- CI build `d57bb47` succeeded in 90s. Verified live: JS hash matches local, `bundle.bin`
+  serves 2,136,384 B as `application/octet-stream`, unknown paths 404, canvas present,
+  all three maps render, zero console errors.
+- **New open gap: 7.0s time-to-interactive** vs a <3s target (deck.gl 284 KB gz + 2.1 MB
+  bundle). Logged as TASKS 12.3 for Phase 10; needs lazy deck.gl loading.
+- **Lesson recorded:** verify deployments by asset hash and rendered output, never by status code.
 
 ### 2026-09-10 — PHASE 3 COMPLETE (map canvas)
 - `src/map/project.ts` (pure projection) + `src/ui/MapCanvas.tsx` (deck.gl OrthographicView,

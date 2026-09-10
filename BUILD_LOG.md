@@ -39,6 +39,54 @@
 
 ---
 
+## 2026-09-10 · Phase 12 (early) — Deployment fixed and verified live
+**Tasks:** 12.1, 12.1a, 12.2   **Commits:** `fa8d901`, `2322633`, `d57bb47`   **Status:** DONE
+
+### Did
+Discovered the live site had been serving **Phase 0 code for three phases**. It had been
+deployed by hand once, so pushing to GitHub did nothing. Diagnosed and fixed properly:
+
+1. Added `wrangler.jsonc` declaring the static-assets Worker.
+2. Connected the repo to Cloudflare Workers Builds (user action in the dashboard).
+3. First CI run failed in **0s**: `assets.directory does not exist: /opt/buildhome/repo/dist`.
+   The log ran `npm clean-install` then went straight to `npx wrangler deploy` — **no build
+   step at all**, because the dashboard had a deploy command but an empty build command.
+4. Fixed by declaring `build.command` in `wrangler.jsonc` rather than asking someone to fill
+   in a dashboard field. Config that lives only in a web UI is invisible to the repo, cannot
+   be reviewed, and breaks silently when the project is re-created.
+
+### Verified
+| Check | Result |
+|---|---|
+| CI build `d57bb47` | **success in 90s** |
+| Live JS hash | `index-DtZ-Mpgn.js` — matches the local Phase 3 build |
+| `/meta.json` | 209,227 B `application/json`; rows/matches/OOB identical to local |
+| `/bundle.bin` | 2,136,384 B `application/octet-stream` — a real binary, not an HTML fallback |
+| Minimaps | 182,762 / 167,976 / 199,664 B, all `image/webp` |
+| Unknown path | **404** — confirms `not_found_handling: "none"` is doing its job |
+| Canvas present | true |
+| All three maps render | screenshotted live; Lockdown shows points on the ring road and **none in the ocean** |
+| Console errors | none |
+| Time to interactive | **7.0s** ⚠️ against a < 3s target |
+
+### Notes
+- **How the staleness was caught:** the URL returned `200` and served the right title, which
+  is exactly why "the link works" is not evidence. What exposed it was diffing the deployed
+  JS hash against the local build, then grepping the deployed bundle: it contained the
+  Phase 0 placeholder string `"Scaffold ready"` and **zero** references to `bundle.bin` or
+  `OrthographicView`. Verify by asset hash, not by HTTP status.
+- **New performance finding (12.3):** 7.0s to interactive, well over target. deck.gl is
+  973 KB of JS (284 KB gzipped) and `bundle.bin` is another 2.1 MB. Both load before the
+  first useful paint. Fix is lazy-loading deck.gl and showing the shell before data lands.
+  Logged for Phase 10 rather than fixed now; it is a real gap, not a rounding error.
+- `npm run deploy` reduced to `wrangler deploy`, since wrangler now runs the build itself.
+
+### Files
+Created: `wrangler.jsonc` · `.nvmrc` (Node 22)
+Modified: `package.json` (deploy scripts), `TASKS.md`
+
+---
+
 ## 2026-09-10 · Phase 3 — Map canvas
 **Tasks:** 3.1 – 3.4   **Commit:** _(this commit)_   **Status:** DONE
 
