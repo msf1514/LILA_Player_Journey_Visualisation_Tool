@@ -1,0 +1,35 @@
+{
+  // Cloudflare Workers Static Assets config.
+  //
+  // The tool is a pure static site: no backend, no server-side logic. This Worker exists
+  // only to serve the built `dist/` directory from Cloudflare's edge, which is why there
+  // is no `main` script entry.
+  //
+  // Keeping this file in the repo matters for two reasons. It makes the deployment
+  // reproducible (`npm run deploy` from a clean clone gives the same result), and it lets
+  // a reviewer see exactly how the thing is hosted rather than taking it on trust.
+
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lila-pjvt",
+  "compatibility_date": "2026-09-01",
+
+  "assets": {
+    "directory": "./dist",
+
+    // Deliberately NOT "single-page-application".
+    //
+    // SPA fallback returns index.html for any unmatched path with a 200. That is the right
+    // choice for client-side routing, but this tool keeps its view state in query params,
+    // so no path-based routes exist and nothing needs the fallback.
+    //
+    // It would also actively hide a real failure: if the data pipeline did not run, a
+    // request for /bundle.bin would return HTML with a 200, `res.ok` would pass, and the
+    // app would die later with a confusing JSON parse error. With "none" the request 404s,
+    // and src/data/loader.ts reports the actual problem and how to fix it.
+    "not_found_handling": "none"
+  },
+
+  "observability": {
+    "enabled": true
+  }
+}

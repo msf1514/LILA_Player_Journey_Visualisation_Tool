@@ -181,7 +181,8 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 12.1 | Cloudflare Pages production deploy | S | Free tier, handles private repos (GitHub Pages does **not** without a paid plan). | `TODO` |
+| 12.1 | Cloudflare deploy | S | Deployed as a **Worker with Static Assets** (`lila-pjvt.msf1514.workers.dev`), not Pages. `wrangler.jsonc` committed so deploys are reproducible from a clean clone. | `WIP` |
+| 12.1a | **Continuous deployment on push** | S | The first deploy was manual, so pushes did not redeploy: the live site sat on Phase 0 code for three phases. Needs the Worker connected to the GitHub repo in the Cloudflare dashboard. | `TODO` |
 | 12.2 | Verify from a clean browser | S | Incognito, no cache, different machine if possible. **"Can we open it and use it without your help?"** is an explicit evaluation criterion. | `TODO` |
 | 12.3 | Check payload + load time | S | Target < 3s to interactive on a normal connection. Bundle is 1.04 MB gz. | `TODO` |
 | 12.4 | Verify deep links work in production | S | Paste a copied URL into a fresh browser; it must restore the exact view. | `TODO` |
