@@ -1,0 +1,424 @@
+/**
+ * layers.ts — deck.gl layer factories.
+ *
+ * Pure functions: given a Store, some row indices and a map config, return layers. No React,
+ * no component state. That keeps every layer testable in isolation and means the canvas never
+ * has to know what it is drawing.
+ *
+ * The layer catalogue is shaped by what this dataset actually contains, not by what an
+ * extraction shooter usually contains:
+ *
+ *   - Loot is 12,866 events, roughly 80% of all non-position activity. It is the main
+ *     gameplay loop here, so it is a first-class layer rather than an afterthought.
+ *   - Combat is 2,410 kills against bots and 699 deaths to bots. Player-versus-player is
+ *     THREE events across five days and 796 matches. Every combat label therefore says
+ *     "vs Bots" explicitly. Implying PvP would be a lie a designer only discovers later,
+ *     and a tool loses its credibility exactly once.
+ *   - Storm deaths number 39, all past ~655s elapsed. Rare, but they are the only evidence
+ *     of the storm existing at all, so they get their own marker rather than being pooled.
+ */
+
+import { BitmapLayer, ScatterplotLayer, PathLayer, PolygonLayer, IconLayer } from 'deck.gl'
+import type { Layer } from 'deck.gl'
+import type { Store } from '../data/store'
+import type { MapConfig } from '../data/types'
+import { worldToUV, uvToWorldSpace, MAP_BOUNDS, S } from './project'
+import { iconAtlas, rampDwell, rampTraffic, token, tokenA } from './theme'
+import type { RGB, ShapeName } from './theme'
+
+/**
+ * Aggregation grid resolution, used everywhere a grid is built.
+ *
+ * 64 divides the 256-cell playable mask exactly, so a coarse cell maps onto 4x4 fine cells
+ * with no rounding. On Ambrose that is roughly a 14m cell, which is about the size of a
+ * building - fine enough to separate a courtyard from the street beside it, coarse enough
+ * that a single wandering player does not light up a region.
+ *
+ * Coverage percentages are meaningless without this number, because a finer grid always
+ * reads lower. Anything reporting coverage must report the grid size beside it.
+ */
+export const GRID_SIZE = 64
+
+export interface EventPoint {
+  position: [number, number]
+  event: string
+  shape: ShapeName
+  bot: boolean
+  matchIdx: number
+  userIdx: number
+  elapsed: number
+}
+
+// ─── Heatmaps ───────────────────────────────────────────────────────────────
+
+/**
+ * Weighted points for a GPU heatmap, carrying the traffic-versus-dwell distinction.
+ *
+ * An earlier version fed the 64x64 aggregation grid's cell centres to HeatmapLayer. It was
+ * semantically right and visually wrong: the kernel quantised onto the lattice and the map
+ * read as a pegboard of dots rather than a surface.
+ *
+ * So the aggregation happens here instead, at full spatial resolution:
+ *
+ *   traffic - one point per (cell, actor) pair, weight 1, placed at the real sample. A
+ *             player crossing a corridor counts once however many samples land there, so
+ *             this answers "how many people came through".
+ *   dwell   - every sample, weighted by the seconds it represents. Standing still for a
+ *             minute weighs a minute, so this answers "how long people stayed".
+ *
+ * The distinction is not cosmetic. Position sampling is time-based, so a naive point count
+ * conflates a corridor with a camping spot, and those call for opposite design responses.
+ * The cell key still uses GRID_SIZE, so "counted once per cell" means the same thing here
+ * as it does in the grid used for coverage.
+ */
+export interface WeightedPoint { position: [number, number]; weight: number }
+
+/** Cap on the seconds one sample may contribute, so a 518s gap cannot dominate a map. */
+const MAX_DWELL_WEIGHT = 30
+
+export function heatPoints(
+  store: Store,
+  rows: Uint32Array,
+  cfg: MapConfig,
+  mode: 'traffic' | 'dwell',
+): WeightedPoint[] {
+  const { x, z, userIdx, tSec } = store.cols
+  const out: WeightedPoint[] = []
+  const seen = mode === 'traffic' ? new Set<number>() : null
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    const { u, v } = worldToUV(x[r], z[r], cfg)
+    if (u < 0 || u > 1 || v < 0 || v > 1) continue
+
+    if (mode === 'traffic') {
+      const col = Math.min(GRID_SIZE - 1, (u * GRID_SIZE) | 0)
+      const row = Math.min(GRID_SIZE - 1, ((1 - v) * GRID_SIZE) | 0)
+      const key = (row * GRID_SIZE + col) * 65536 + userIdx[r]
+      if (seen!.has(key)) continue
+      seen!.add(key)
+      out.push({ position: uvToWorldSpace(u, v), weight: 1 })
+    } else {
+      const prev = i > 0 ? rows[i - 1] : -1
+      const contiguous = prev >= 0 && r === prev + 1 && userIdx[r] === userIdx[prev]
+      const dt = contiguous ? tSec[r] - tSec[prev] : 5   // 5s is the median sampling interval
+      out.push({ position: uvToWorldSpace(u, v), weight: Math.min(Math.max(dt, 0), MAX_DWELL_WEIGHT) })
+    }
+  }
+  return out
+}
+
+/**
+ * Bake weighted points into a heat texture.
+ *
+ * deck.gl's HeatmapLayer re-aggregates on every viewport change and drags the whole layer
+ * stack through the recomputation with it. Measured while panning at 1400x900:
+ *
+ *     traffic + paths (986)        2 fps
+ *     traffic + loot (9,936)      11 fps
+ *     traffic + kills (1,794)     25 fps
+ *     all markers, no heatmap     58 fps
+ *
+ * The cost scaled with the object count of whatever was drawn *alongside* the heatmap,
+ * which makes a live GPU heatmap the wrong tool here: a designer needs to pan a map with
+ * markers on it, and that is exactly the case it degrades.
+ *
+ * So the heat is rendered once into a texture and shown as a BitmapLayer. Per-frame cost
+ * becomes constant and independent of point count, because panning just samples an existing
+ * image. The texture is rebuilt only when the data or the filter changes.
+ *
+ * Tradeoff: the heat is baked at HEAT_RES, so zooming far in softens it. At 256 across a
+ * 1024-unit map that is 4 render units per texel, finer than the 64-cell analysis grid, and
+ * a heatmap is a density impression rather than something to read pixel by pixel.
+ */
+const HEAT_RES = 256
+
+/** Separable box blur, run three times to approximate a Gaussian. Cheap and predictable. */
+function blur(src: Float32Array, n: number, radius: number): Float32Array {
+  let buf = src
+  const tmp = new Float32Array(n * n)
+  for (let pass = 0; pass < 3; pass++) {
+    // horizontal
+    for (let y = 0; y < n; y++) {
+      let sum = 0
+      for (let x = -radius; x <= radius; x++) sum += buf[y * n + Math.min(n - 1, Math.max(0, x))]
+      for (let x = 0; x < n; x++) {
+        tmp[y * n + x] = sum / (radius * 2 + 1)
+        const out = Math.min(n - 1, Math.max(0, x - radius))
+        const inn = Math.min(n - 1, Math.max(0, x + radius + 1))
+        sum += buf[y * n + inn] - buf[y * n + out]
+      }
+    }
+    // vertical
+    const next = new Float32Array(n * n)
+    for (let x = 0; x < n; x++) {
+      let sum = 0
+      for (let y = -radius; y <= radius; y++) sum += tmp[Math.min(n - 1, Math.max(0, y)) * n + x]
+      for (let y = 0; y < n; y++) {
+        next[y * n + x] = sum / (radius * 2 + 1)
+        const out = Math.min(n - 1, Math.max(0, y - radius))
+        const inn = Math.min(n - 1, Math.max(0, y + radius + 1))
+        sum += tmp[inn * n + x] - tmp[out * n + x]
+      }
+    }
+    buf = next
+  }
+  return buf
+}
+
+function heatCanvas(points: WeightedPoint[], ramp: RGB[]): HTMLCanvasElement {
+  const n = HEAT_RES
+  const field = new Float32Array(n * n)
+
+  for (const p of points) {
+    const col = Math.min(n - 1, Math.max(0, ((p.position[0] / S) * n) | 0))
+    // Texture rows run top-down; render space Y grows up.
+    const row = Math.min(n - 1, Math.max(0, ((1 - p.position[1] / S) * n) | 0))
+    field[row * n + col] += p.weight
+  }
+
+  const smooth = blur(field, n, 3)
+
+  // Normalise to a high percentile rather than the maximum. One extreme cell - a spawn
+  // point, or a player who idled in a corner - would otherwise flatten the entire map to
+  // near-black and hide every real difference.
+  const nonZero = Array.from(smooth).filter((v) => v > 0).sort((a, b) => a - b)
+  const scale = nonZero.length ? nonZero[Math.floor(nonZero.length * 0.985)] || 1 : 1
+
+  const canvas = document.createElement('canvas')
+  canvas.width = n
+  canvas.height = n
+  const ctx = canvas.getContext('2d')!
+  const img = ctx.createImageData(n, n)
+
+  for (let i = 0; i < n * n; i++) {
+    const t = Math.min(1, smooth[i] / scale)
+    if (t <= 0.02) continue
+    // Ramp stop 0 is the background; start at stop 1 so faint values still read.
+    const pos = t * (ramp.length - 1)
+    const lo = Math.min(ramp.length - 1, Math.floor(pos))
+    const hi = Math.min(ramp.length - 1, lo + 1)
+    const f = pos - lo
+    const o = i * 4
+    img.data[o] = ramp[lo][0] + (ramp[hi][0] - ramp[lo][0]) * f
+    img.data[o + 1] = ramp[lo][1] + (ramp[hi][1] - ramp[lo][1]) * f
+    img.data[o + 2] = ramp[lo][2] + (ramp[hi][2] - ramp[lo][2]) * f
+    // Fade in with intensity so low-traffic ground stays legible beneath.
+    img.data[o + 3] = Math.min(235, 40 + t * 215)
+  }
+  ctx.putImageData(img, 0, 0)
+  return canvas
+}
+
+/**
+ * Build the heat image. THIS is the expensive step and the one worth caching.
+ *
+ * Cache the returned canvas, never the Layer. deck.gl layers are single-use descriptors:
+ * reusing an instance across renders breaks their lifecycle and the layer silently stops
+ * drawing, with no error. Layers are cheap to construct, so build them fresh every render
+ * and memoise the image they point at.
+ */
+export const trafficImage = (points: WeightedPoint[]) => heatCanvas(points, rampTraffic())
+export const dwellImage = (points: WeightedPoint[]) => heatCanvas(points, rampDwell())
+
+export function heatLayer(id: string, image: HTMLCanvasElement): Layer {
+  return new BitmapLayer({
+    id,
+    image,
+    bounds: MAP_BOUNDS,
+    opacity: 0.82,
+    textureParameters: { minFilter: 'linear', magFilter: 'linear' },
+    pickable: false,
+  })
+}
+
+// ─── Dead space ─────────────────────────────────────────────────────────────
+
+/**
+ * Playable cells nobody ever entered.
+ *
+ * Drawn as explicit squares rather than a heatmap because absence is not a gradient: a cell
+ * either saw a player or it did not, and shading it would imply a confidence the measurement
+ * does not have.
+ */
+export function deadSpaceLayer(cells: number[], size: number): Layer {
+  const step = S / size
+  const polys = cells.map((cell) => {
+    const col = cell % size
+    const row = (cell / size) | 0
+    const x = col * step
+    const y = (size - row - 1) * step
+    return { polygon: [[x, y], [x + step, y], [x + step, y + step], [x, y + step]] as [number, number][] }
+  })
+  return new PolygonLayer<{ polygon: [number, number][] }>({
+    id: 'dead-space',
+    data: polys,
+    getPolygon: (d) => d.polygon,
+    filled: true,
+    stroked: false,
+    getFillColor: tokenA('--ev-unknown', 0.3),
+    pickable: false,
+  })
+}
+
+// ─── Event markers ──────────────────────────────────────────────────────────
+
+/** Which shape and colour each event name draws as. Unknown names fall through to circle. */
+const EVENT_STYLE: Record<string, { shape: ShapeName; color: string; label: string }> = {
+  Loot:          { shape: 'square',   color: '--ev-loot',  label: 'Loot pickup' },
+  BotKill:       { shape: 'triangle', color: '--ev-kill',  label: 'Kill (vs bot)' },
+  Kill:          { shape: 'diamond',  color: '--ev-kill',  label: 'Kill (vs player)' },
+  BotKilled:     { shape: 'cross',    color: '--ev-death', label: 'Death (to bot)' },
+  Killed:        { shape: 'diamond',  color: '--ev-death', label: 'Death (to player)' },
+  KilledByStorm: { shape: 'hexagon',  color: '--ev-storm', label: 'Death (storm)' },
+}
+
+export const eventStyle = (name: string) =>
+  EVENT_STYLE[name] ?? { shape: 'circle' as ShapeName, color: '--ev-unknown', label: name }
+
+/** Collect the rows matching `events` into positioned marker points. */
+export function collectEvents(
+  store: Store,
+  rows: Uint32Array,
+  cfg: MapConfig,
+  events: ReadonlySet<string>,
+): EventPoint[] {
+  const out: EventPoint[] = []
+  const { x, z, evIdx, userIdx, matchIdx, elapsed } = store.cols
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i]
+    const name = store.eventName(evIdx[r])
+    if (!events.has(name)) continue
+    const { u, v } = worldToUV(x[r], z[r], cfg)
+    out.push({
+      position: uvToWorldSpace(u, v),
+      event: name,
+      shape: eventStyle(name).shape,
+      bot: store.isBotUser[userIdx[r]],
+      matchIdx: matchIdx[r],
+      userIdx: userIdx[r],
+      elapsed: elapsed[r],
+    })
+  }
+  return out
+}
+
+/**
+ * Marker layer. Shape carries the event type, colour reinforces it.
+ *
+ * IconLayer rather than ScatterplotLayer because scatterplot can only draw circles, and
+ * colour alone is not enough to separate six event meanings for a colour-blind viewer or in
+ * a printed screenshot.
+ */
+export function eventLayer(id: string, points: EventPoint[], sizePx = 11): Layer {
+  const { url, mapping } = iconAtlas()
+  return new IconLayer<EventPoint>({
+    id,
+    data: points,
+    iconAtlas: url,
+    iconMapping: mapping,
+    getIcon: (d) => d.shape,
+    getPosition: (d) => d.position,
+    getSize: sizePx,
+    sizeUnits: 'pixels',
+    getColor: (d) => tokenA(eventStyle(d.event).color, 0.92),
+    pickable: true,
+  })
+}
+
+// ─── Journeys ───────────────────────────────────────────────────────────────
+
+export interface PathSegment {
+  path: [number, number][]
+  bot: boolean
+  userIdx: number
+  matchIdx: number
+}
+
+/** Gaps beyond this break a path rather than being drawn through. */
+export const PATH_GAP_SECONDS = 30
+
+/**
+ * Build journey paths, split wherever sampling stops.
+ *
+ * Position sampling has a 5s median but a 518s maximum gap. Joining across a gap that size
+ * draws a confident straight line through geometry the player never crossed, usually through
+ * a building. A level designer who notices one such line stops trusting every other layer,
+ * and they will not file a bug about it. Breaking the path is the honest rendering: it shows
+ * what was measured and stays silent about what was not.
+ */
+export function buildPaths(
+  store: Store,
+  cfg: MapConfig,
+  mapIdx: number,
+  keep?: (userIdx: number, matchIdx: number) => boolean,
+): PathSegment[] {
+  const { x, z, tSec, evIdx } = store.cols
+  const out: PathSegment[] = []
+
+  for (const j of store.journeys) {
+    if (j.mapIdx !== mapIdx) continue
+    if (keep && !keep(j.userIdx, j.matchIdx)) continue
+
+    let current: [number, number][] = []
+    let prevT = -Infinity
+
+    for (let i = j.start; i < j.end; i++) {
+      const name = store.eventName(evIdx[i])
+      if (name !== 'Position' && name !== 'BotPosition') continue
+      const t = tSec[i]
+      if (current.length && t - prevT > PATH_GAP_SECONDS) {
+        if (current.length > 1) out.push({ path: current, bot: j.bot, userIdx: j.userIdx, matchIdx: j.matchIdx })
+        current = []
+      }
+      const { u, v } = worldToUV(x[i], z[i], cfg)
+      current.push(uvToWorldSpace(u, v))
+      prevT = t
+    }
+    if (current.length > 1) out.push({ path: current, bot: j.bot, userIdx: j.userIdx, matchIdx: j.matchIdx })
+  }
+  return out
+}
+
+export function pathLayer(segments: PathSegment[]): Layer {
+  return new PathLayer<PathSegment>({
+    id: 'paths',
+    data: segments,
+    getPath: (d) => d.path,
+    getColor: (d) => (d.bot ? tokenA('--actor-bot', 0.5) : tokenA('--actor-human', 0.55)),
+    getWidth: (d) => (d.bot ? 1.1 : 1.4),
+    widthUnits: 'pixels',
+    widthMinPixels: 1,
+    capRounded: true,
+    jointRounded: true,
+    pickable: false,
+  })
+}
+
+/**
+ * Live actor positions. Bots are hollow, humans solid, so the two read apart even where a
+ * cluster overlaps and even in greyscale.
+ */
+export function actorLayer(points: { position: [number, number]; bot: boolean }[]): Layer {
+  return new ScatterplotLayer<{ position: [number, number]; bot: boolean }>({
+    id: 'actors',
+    data: points,
+    getPosition: (d) => d.position,
+    getRadius: 3,
+    radiusUnits: 'pixels',
+    radiusMinPixels: 2,
+    filled: true,
+    stroked: true,
+    lineWidthUnits: 'pixels',
+    getLineWidth: 1,
+    getFillColor: (d) => (d.bot ? tokenA('--actor-bot', 0.18) : tokenA('--actor-human', 0.85)),
+    getLineColor: (d) => (d.bot ? tokenA('--actor-bot', 0.95) : tokenA('--actor-human', 0.95)),
+    pickable: false,
+  })
+}
+
+/** Colour tokens the legend needs, resolved to CSS strings. */
+export function legendColor(name: string): string {
+  const [r, g, b] = token(name)
+  return `rgb(${r} ${g} ${b})`
+}

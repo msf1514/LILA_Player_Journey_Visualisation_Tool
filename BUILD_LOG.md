@@ -39,6 +39,72 @@
 
 ---
 
+## 2026-09-10 - Phase 4 - Data layers
+**Tasks:** 4.1 - 4.10   **Commit:** _(this commit)_   **Status:** DONE
+
+### Did
+- `src/map/theme.ts` - reads colours from the CSS tokens at runtime and caches them, so the
+  legend and the canvas cannot drift. Builds a marker-shape icon atlas on a canvas, plus the
+  matching inline SVG so the legend draws exactly what the map draws.
+- `src/map/layers.ts` - pure layer factories: heat images, dead space, event markers,
+  journey paths, live actors.
+- `src/ui/LayerPanel.tsx` - eight toggles with counts and an always-visible legend.
+- `src/App.tsx` - layers composed in a fixed draw order, stats strip, tooltips. Phase 3's
+  debug point overlay deleted.
+
+### Verified
+| Check | Result |
+|---|---|
+| `npm test` | 63 passed |
+| `npx tsc -b` | exit 0 |
+| Console errors | none, with every layer enabled |
+| Pan, all 8 layers on | **median 57 fps** (criterion was >30) |
+| Traffic + all markers + paths | 57 fps |
+| All markers, no heat | 57 fps |
+
+**Registration, by looking (Ambrose Valley):**
+- **Traffic** traces the road network as continuous routes between places.
+- **Dwell** is discrete blobs sitting on buildings; the roads all but vanish.
+- **Loot** green squares cluster inside buildings and compounds.
+- **Kills** orange triangles cluster on the same compounds.
+- **Dead space** grey cells hug the island fringe, none in the black void.
+
+The traffic/dwell contrast is the headline result and it is visually unmistakable:
+**corridors versus destinations**, from identical rows.
+
+### Notes
+- **HeatmapLayer was unusable here and had to be replaced.** deck.gl re-aggregates it on
+  every viewport change and drags the whole layer stack through the recomputation. Measured
+  while panning: traffic + paths **2 fps**, traffic + loot **11 fps**, traffic + kills 25 fps,
+  all markers with no heatmap 58 fps. The cost scaled with the object count of whatever was
+  drawn beside the heatmap, which is precisely the case a designer needs. Replaced with a
+  heat field rasterised once to a canvas and shown as a BitmapLayer: per-frame cost is now
+  constant and independent of point count. **1 fps to 57 fps.**
+- **Self-inflicted bug worth remembering: never memoise a deck.gl Layer.** Caching layer
+  instances to avoid rebuilding them stopped the icon layers rendering entirely, silently and
+  with no error. deck.gl layers are single-use descriptors; reusing an instance breaks the
+  lifecycle. Worse, it briefly made the perf numbers look good because the layers were not
+  drawing. Cache the *image*; build layers fresh each render, they are cheap.
+- `pickingRadius` is a Deck prop, not a Layer prop. Setting it on IconLayer threw an
+  initialisation assertion; setting it on the React `DeckGL` component threw as well in this
+  version. Removed; default picking works.
+- Heat is normalised to the 98.5th percentile rather than the maximum, so one extreme cell
+  (a spawn, or a player idling in a corner) cannot flatten the whole map to near-black.
+- Diagnostic path that worked: bisect by enabling one layer at a time and measuring. Layer
+  totals were 37/36 fps for the heatmaps and 58-63 for everything else, but all-on was 1 fps,
+  which immediately ruled out a simple additive cost and pointed at an interaction.
+
+### Known limitation
+Enabling all eight layers at once is visually unreadable: 986 paths and roughly 12,000
+markers bury the map. Individually every layer is legible. This is what Phase 5's filters
+exist to solve, so it is recorded rather than patched over.
+
+### Files
+Created: `src/map/theme.ts` - `src/map/layers.ts` - `src/ui/LayerPanel.tsx`
+Modified: `src/App.tsx` - `src/ui/MapCanvas.tsx` - `src/ui/controls.css`
+
+---
+
 ## 2026-09-10 · Phase 3 fix — Map framing
 **Tasks:** 3.3 (revisit)   **Commit:** _(this commit)_   **Status:** DONE
 

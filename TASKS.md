@@ -80,16 +80,16 @@
 
 | # | Layer | Size | Detail | Status |
 |---|---|---|---|---|
-| 4.1 | **Traffic** | M | Unique player-passes per cell. 72,849 instants. Answers "where do people go." | `TODO` |
-| 4.2 | **Dwell** | M | Time-weighted occupancy. **Separate from traffic (D7)** — sampling is time-based, so a player standing 60s emits ~12 points vs a sprinter's 2. High traffic + low dwell = corridor. Low traffic + high dwell = camp spot or geometry snag. | `TODO` |
-| 4.3 | **Loot** | S | 11,561 instants — **80.3% of all non-position events.** The actual gameplay loop. | `TODO` |
-| 4.4 | **Kills (vs Bots)** | S | 2,361 instants. **Label must say "vs Bots" (D11)** — implying PvP would be a lie, and trust dies once and silently. | `TODO` |
-| 4.5 | **Deaths** | S | 739 instants, split by cause: bot (697) · storm (39) · PvP (3). Distinct markers per cause. | `TODO` |
-| 4.6 | **Dead space** | M | Playable cells with zero visits, using the mask from 1.5. Coverage: Ambrose 87% · GrandRift 84% · **Lockdown 65%**. | `TODO` |
-| 4.7 | **Paths** | L | `PathLayer` per journey. **Break the path on gaps > ~30s (D12)** — median gap is 5s but max is **518s**; drawing strides the player never took destroys trust permanently. Humans solid, bots dashed. | `TODO` |
-| 4.8 | **Live actors** | M | Moving dots during playback. Humans cyan, bots amber. | `TODO` |
-| 4.9 | Layer control panel | S | Floating over canvas, map-app style. Opacity slider per layer. Legend always visible. | `TODO` |
-| 4.10 | Colour + shape system | M | **Colorblind-safe: markers differ by shape as well as colour.** Humans cyan / bots amber. Kill = triangle, death = X, storm = hexagon, loot = small square, PvP = diamond. | `TODO` |
+| 4.1 | **Traffic** | M | Unique player-passes per cell. 72,849 instants. Answers "where do people go." | `DONE` |
+| 4.2 | **Dwell** | M | Time-weighted occupancy. **Separate from traffic (D7)** — sampling is time-based, so a player standing 60s emits ~12 points vs a sprinter's 2. High traffic + low dwell = corridor. Low traffic + high dwell = camp spot or geometry snag. | `DONE` |
+| 4.3 | **Loot** | S | 11,561 instants — **80.3% of all non-position events.** The actual gameplay loop. | `DONE` |
+| 4.4 | **Kills (vs Bots)** | S | 2,361 instants. **Label must say "vs Bots" (D11)** — implying PvP would be a lie, and trust dies once and silently. | `DONE` |
+| 4.5 | **Deaths** | S | 739 instants, split by cause: bot (697) · storm (39) · PvP (3). Distinct markers per cause. | `DONE` |
+| 4.6 | **Dead space** | M | Playable cells with zero visits, using the mask from 1.5. Coverage: Ambrose 87% · GrandRift 84% · **Lockdown 65%**. | `DONE` |
+| 4.7 | **Paths** | L | `PathLayer` per journey. **Break the path on gaps > ~30s (D12)** — median gap is 5s but max is **518s**; drawing strides the player never took destroys trust permanently. Humans solid, bots dashed. | `DONE` |
+| 4.8 | **Live actors** | M | Moving dots during playback. Humans cyan, bots amber. | `DONE` |
+| 4.9 | Layer control panel | S | Floating over canvas, map-app style. Opacity slider per layer. Legend always visible. | `DONE` |
+| 4.10 | Colour + shape system | M | **Colorblind-safe: markers differ by shape as well as colour.** Humans cyan / bots amber. Kill = triangle, death = X, storm = hexagon, loot = small square, PvP = diamond. | `DONE` |
 
 ---
 

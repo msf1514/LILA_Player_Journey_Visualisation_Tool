@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DeckGL, OrthographicView, BitmapLayer, ScatterplotLayer } from 'deck.gl'
+import { DeckGL, OrthographicView, BitmapLayer } from 'deck.gl'
 import type { Layer } from 'deck.gl'
-import { MAP_BOUNDS, FULL_BOUNDS, initialViewState, minimapUrl, S } from '../map/project'
+import { MAP_BOUNDS, FULL_BOUNDS, initialViewState, minimapUrl } from '../map/project'
 import type { UVBounds } from '../map/project'
 import type { MapConfig } from '../data/types'
 
@@ -25,6 +25,8 @@ export interface MapCanvasProps {
    * art is mostly empty margin, so callers should pass the region the data occupies.
    */
   focus?: UVBounds
+  /** deck.gl tooltip callback for pickable layers. */
+  getTooltip?: (info: { object?: unknown }) => { text: string; style?: Record<string, string> } | null
 }
 
 /**
@@ -40,7 +42,7 @@ export interface MapCanvasProps {
  * correct on a symmetric map while being wrong everywhere else, which is the worst
  * available way for this to fail.
  */
-export default function MapCanvas({ mapId, config, layers = [], focus = FULL_BOUNDS }: MapCanvasProps) {
+export default function MapCanvas({ mapId, config, layers = [], focus = FULL_BOUNDS, getTooltip }: MapCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [viewState, setViewState] = useState<ViewState>(() => initialViewState())
@@ -117,6 +119,7 @@ export default function MapCanvas({ mapId, config, layers = [], focus = FULL_BOU
         layers={[minimap, ...layers]}
         style={{ position: 'absolute', inset: 0 }}
         getCursor={({ isDragging }) => (isDragging ? 'grabbing' : 'grab')}
+        getTooltip={getTooltip as never}
       />
 
       <ViewControls
@@ -196,26 +199,4 @@ function ControlButton({
       {children}
     </button>
   )
-}
-
-/**
- * Scaffolding for Phase 3 only.
- *
- * Registration cannot be verified by reading code or by the absence of an error: a wrongly
- * projected map still renders as a picture of a map. Plotting real position samples is the
- * only way to see whether points land on roads and inside buildings.
- *
- * Phase 4 replaces this with the real traffic, dwell, event and path layers.
- */
-export function debugPointsLayer(points: [number, number][], id = 'debug-points') {
-  return new ScatterplotLayer<[number, number]>({
-    id,
-    data: points,
-    getPosition: (d) => [d[0] * S, d[1] * S],
-    getRadius: 1.4,
-    radiusUnits: 'pixels',
-    radiusMinPixels: 1,
-    getFillColor: [86, 180, 233, 190], // --actor-human
-    pickable: false,
-  })
 }

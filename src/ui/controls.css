@@ -46,3 +46,34 @@
   border-color: var(--accent);
   color: var(--text-1);
 }
+
+/* Layer toggles. Colour-only feedback: these are clicked constantly, and animating a
+   high-frequency control fights the user rather than helping them. */
+.layer-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 4px var(--space-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  color: var(--text-1);
+  cursor: pointer;
+  transition: background var(--dur-instant) var(--ease-out);
+}
+.layer-row:hover { background: var(--bg-2); }
+.layer-row input { accent-color: var(--accent); margin: 0; }
+
+/* Stats strip along the bottom of the canvas. */
+.stat-strip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 6px var(--space-4);
+  background: var(--bg-1);
+  border-top: 1px solid var(--line);
+  font-size: var(--text-xs);
+  color: var(--text-2);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.stat-strip b { color: var(--text-1); font-weight: 500; }

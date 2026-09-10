@@ -56,8 +56,8 @@ produces a finding, a decision, a correction, code, or progress.
 **Deadline:** 5 days from receipt · **Effort budget:** no fixed hour cap (D19); deadline is the constraint
 **Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public)
 **Live:** https://lila-pjvt.msf1514.workers.dev — Cloudflare Worker + Static Assets, auto-deploys on push to `main`
-**Phase:** **Phases 0–3 COMPLETE.** Pipeline, runtime and map canvas verified; 60 tests green; registration confirmed visually on all 3 maps.
-**Next action:** Phase 4 — data layers (traffic, dwell, loot, kills, deaths, dead space, paths)
+**Phase:** **Phases 0–4 COMPLETE.** Pipeline, runtime, canvas and eight data layers verified; 63 tests green; 57 fps with all layers on.
+**Next action:** Phase 5 — filters (map, date, match, actor, event type)
 
 Docs: `CONTEXT.md` (facts/decisions) · `TASKS.md` (checklist) · `BUILD_LOG.md` (activity log w/ evidence)
 
@@ -239,6 +239,7 @@ damage, or win/loss. **This telemetry cannot tell you whether anyone succeeded.*
 | 5 | "Negative space is the headline feature" | **Demoted.** Only Lockdown (65%) qualifies | Followed from correction #3 |
 | 6 | "Use `hysnappy` for Snappy decompression" | **Breaks it.** hyparquet's built-in works | Assumed the companion lib was needed |
 | 8 | "60 FPS locked" from the deck.gl perf spike | **Worthless measurement.** It ran under `--use-gl=swiftshader`, where deck.gl fires `onAfterRender` and logs no error but **draws nothing** — so it timed an empty loop. Real pacing while panning (1280x900, real GL): median **16.7 ms**, p90 31.7 ms with no data overlay, 94.1 ms with 9,739 raw points. Conclusion unchanged (median ~60 fps) but the original evidence was not evidence. **Never pass GL flags to Playwright when verifying deck.gl output.** | Trusted frame timings without looking at the rendered frame |
+| 9 | Memoising deck.gl `Layer` instances is a safe optimisation | **False, and silently destructive.** Layers are single-use descriptors; reusing an instance breaks the lifecycle and the layer stops drawing with **no error**. It also corrupted a perf measurement, since not-drawing looks fast. Cache the expensive *input* (an image, a data array); construct layers fresh every render. | Assumed React memoisation rules applied to deck.gl objects |
 | 7 | "Map coverage is 87 / 84 / 65% of playable land" — quoted as a bare figure | **Resolution-dependent.** At 64×64 with the shipped 256² mask: **83 / 65 / 55%**. At 32×32: 87 / 84 / 65%. Finer grids always read lower. **Ranking is stable — Lockdown is consistently worst — and that is the real insight.** INSIGHTS.md must state the grid resolution; the dead-space layer must use one fixed resolution. | Treated a grid-dependent statistic as an absolute |
 
 ---
@@ -487,6 +488,22 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-10 - PHASE 4 COMPLETE (data layers)
+- Eight composable layers with an always-visible legend: traffic, dwell, loot, kills (vs bots),
+  deaths (split by cause), dead space, paths, positions. Debug scaffolding removed.
+- **Traffic vs dwell is visually unmistakable**: traffic traces the road network, dwell sits
+  as discrete blobs on buildings. Corridors versus destinations, from identical rows.
+- **deck.gl HeatmapLayer replaced with a baked texture.** It re-aggregates on every viewport
+  change and drags the whole layer stack with it: traffic + paths measured **2 fps**,
+  traffic + loot 11 fps. Rasterising the heat field once to a canvas made per-frame cost
+  constant. **1 fps to 57 fps** with all layers on.
+- **Correction #9: never memoise a deck.gl Layer instance.** Doing so silently stopped the
+  icon layers rendering, with no error, and briefly made perf numbers look good because
+  nothing was drawing. Layers are single-use descriptors. Cache the image, not the layer.
+- 63 tests pass, tsc clean, zero console errors with every layer on.
+- Known limitation: all eight layers at once is unreadable. That is what Phase 5 filters fix.
+- **Next: Phase 5 - filters (map, date, match, actor, event type).**
 
 ### 2026-09-10 — DEPLOYMENT LIVE AND VERIFIED
 - **Live URL: https://lila-pjvt.msf1514.workers.dev** (Cloudflare Worker + Static Assets).
