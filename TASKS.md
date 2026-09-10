@@ -69,10 +69,10 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 3.1 | `src/map/project.ts` | S | world → UV → render-space. Never assume image pixel dimensions (they differ per map and one isn't square). | `TODO` |
-| 3.2 | `src/ui/MapCanvas.tsx` | M | deck.gl `OrthographicView({flipY:false})`, world space 1024×1024, `X=u*S`, `Y=v*S`, `BitmapLayer` bounds `[0,0,S,S]`. **Verified pixel-perfect in the spike.** | `TODO` |
-| 3.3 | Pan / zoom / reset | S | `controller: true`. Reset-view button. Zoom limits so users can't get lost. | `TODO` |
-| 3.4 | Verify registration on all 3 maps | S | Compare against the Python reference renders. Hotspots must land inside buildings; on GrandRift they must sit on the labeled POIs (*Burnt Zone, Labour Quarters, Gas Station, Engineer's Quarters*). | `TODO` |
+| 3.1 | `src/map/project.ts` | S | world → UV → render-space. Never assume image pixel dimensions (they differ per map and one isn't square). | `DONE` |
+| 3.2 | `src/ui/MapCanvas.tsx` | M | deck.gl `OrthographicView({flipY:false})`, world space 1024×1024, `X=u*S`, `Y=v*S`, `BitmapLayer` bounds `[0,0,S,S]`. **Verified pixel-perfect in the spike.** | `DONE` |
+| 3.3 | Pan / zoom / reset | S | `controller: true`. Reset-view button. Zoom limits so users can't get lost. | `DONE` |
+| 3.4 | Verify registration on all 3 maps | S | Compare against the Python reference renders. Hotspots must land inside buildings; on GrandRift they must sit on the labeled POIs (*Burnt Zone, Labour Quarters, Gas Station, Engineer's Quarters*). | `DONE` |
 
 ---
 

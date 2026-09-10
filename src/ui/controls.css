@@ -1,0 +1,48 @@
+/*
+ * controls.css — shared control styling.
+ *
+ * Component styles live here rather than in design/tokens.css: tokens are the vocabulary,
+ * this is a sentence written with it. Nothing in this file introduces a new colour, size
+ * or duration; every value is a var() from the token set.
+ */
+
+.map-control {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-2);
+  color: var(--text-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  line-height: 1;
+  cursor: pointer;
+  /* Colour only. These are pressed constantly; moving them would fight the user. */
+  transition: background var(--dur-instant) var(--ease-out),
+              border-color var(--dur-instant) var(--ease-out);
+}
+.map-control:hover:not(:disabled) { background: var(--bg-3); border-color: var(--accent); }
+.map-control:active:not(:disabled) { background: var(--accent-weak); }
+.map-control:disabled { color: var(--text-3); cursor: default; opacity: 0.55; }
+
+/* Map switcher: a real radiogroup, so arrow keys move between maps. */
+.map-tab {
+  padding: 5px var(--space-3);
+  background: transparent;
+  color: var(--text-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition: background var(--dur-instant) var(--ease-out),
+              color var(--dur-instant) var(--ease-out);
+}
+.map-tab:hover { background: var(--bg-2); color: var(--text-1); }
+.map-tab[aria-checked='true'] {
+  background: var(--accent-weak);
+  border-color: var(--accent);
+  color: var(--text-1);
+}

@@ -39,6 +39,74 @@
 
 ---
 
+## 2026-09-10 · Phase 3 — Map canvas
+**Tasks:** 3.1 – 3.4   **Commit:** _(this commit)_   **Status:** DONE
+
+### Did
+- `src/map/project.ts` — pure projection, no React or deck.gl imports. `worldToUV`,
+  `uvToWorld`, `uvToWorldSpace`, `worldToWorldSpace`, `worldSpaceToUV`, `uvToPixel`,
+  `isInBounds`, `minimapUrl`, zoom clamps and `initialViewState`.
+- `src/map/project.test.ts` — 15 tests, including the dataset README's worked example and
+  the measured coordinate extremes of all three maps.
+- `src/ui/MapCanvas.tsx` — deck.gl `OrthographicView({flipY:false})` into a fixed 1024-unit
+  square, `BitmapLayer` at `[0,0,S,S]`, clamped zoom, keyboard-operable controls, plus a
+  clearly-marked `debugPointsLayer` scaffold for Phase 4 to replace.
+- `src/ui/controls.css` — control styling built only from existing tokens.
+- `src/App.tsx` — map switcher as a real `radiogroup` (arrow keys move, single tab stop)
+  and a toggle for the position-sample overlay.
+
+### Verified
+| Check | Result |
+|---|---|
+| `npm test` | **60 tests passed** (20 pipeline + 25 runtime + 15 projection), 2.38s |
+| `npx tsc -b` | exit 0 |
+| `npm run build` | clean, 17s |
+| **Registration, by looking** | See below. All three confirmed against map art. |
+| Console errors | none, on all three maps |
+| Keyboard | Tab reaches the switcher; ArrowRight cycles Ambrose → Grand Rift → Lockdown; exactly one tab stop in the group; focus ring visible in a screenshot |
+| Zoom / reset | zoom-in disables at max; reset returns to the framed view |
+| Pan frame pacing (real GL, 1280x900) | points off: median 16.7 ms, p90 31.7, worst 40.8 · points on (9,739): median 16.7 ms, p90 94.1, worst 111.4 |
+
+**Registration evidence (this is the acceptance criterion that matters):**
+- **Grand Rift** — the decisive one, because its POI names are baked into the art. Samples
+  cluster exactly on **Mine Pit**, **Engineer's Quarters**, **Labour Quarters**,
+  **Burnt Zone** and **Gas Station**, and trace the roads between them.
+- **Ambrose Valley** — samples sit inside the stadium, the compounds and the southern town,
+  follow the road network, and none fall in the surrounding void.
+- **Lockdown** — samples follow the ring road and fill the buildings, with **zero points in
+  the teal ocean** at the top of the map. A projection offset would put points in the water.
+
+### Notes
+- **The blank-canvas failure, and why the "confirm by looking" rule earned its keep.**
+  First screenshots came back completely empty: clean compile, zero console errors, correct
+  canvas size, working WebGL context. Nothing on screen. Isolating it (controlled vs
+  uncontrolled viewState, then PNG vs WebP at 1024 vs 2048) ruled out the code entirely —
+  all four image variants were blank, including the exact PNG that had rendered in the
+  original spike. The cause was the **test harness**: I launched Chromium with
+  `--use-gl=swiftshader --enable-unsafe-swiftshader`. Under SwiftShader deck.gl reports
+  `onAfterRender` and logs no error, but draws nothing. Removing those flags rendered all
+  three maps correctly. **Never pass GL flags to Playwright when verifying deck.gl output.**
+- **This invalidates the earlier "60 FPS locked" spike figure** (BUILD_LOG, Phase 0 spike 4).
+  That number was measured under SwiftShader, i.e. on a renderer drawing nothing, so it
+  measured an empty loop. Real measured pacing is in the table above. The architecture
+  conclusion is unchanged — the median holds ~60 fps — but the original evidence was worthless.
+- The p90 tail comes from the raw 9,739-point debug overlay, confirmed by measuring with it
+  off (31.7 ms) and on (94.1 ms). It is scaffolding; Phase 4's layers aggregate to grids.
+- **Scope violation, caught and fixed:** I first appended control styles to
+  `src/design/tokens.css`, which the Phase 3 brief explicitly forbids touching. Reverted and
+  moved to `src/ui/controls.css`. Better separation anyway: tokens are the vocabulary,
+  component CSS is a sentence written with it.
+- Panning is deliberately not eased (`transitionDuration: 0`); only reset animates, at 220ms.
+- `getComputedStyle(el, ':focus-visible')` returns nothing — pseudo-class styles are not
+  readable that way. Focus was verified by screenshot instead.
+
+### Files
+Created: `src/map/project.ts` · `src/map/project.test.ts` · `src/ui/MapCanvas.tsx` ·
+`src/ui/controls.css`
+Modified: `src/App.tsx` · `src/main.tsx`
+
+---
+
 ## 2026-09-10 · Phase 2 — Data runtime + design foundation
 **Tasks:** 2.1 – 2.5, 10.0   **Commit:** _(this commit)_   **Status:** DONE
 

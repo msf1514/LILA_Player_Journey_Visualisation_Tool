@@ -55,8 +55,8 @@ produces a finding, a decision, a correction, code, or progress.
 **Deliverable:** Player Journey Visualization Tool + hosted URL + 3 docs, in ONE GitHub repo
 **Deadline:** 5 days from receipt · **Effort budget:** no fixed hour cap (D19); deadline is the constraint
 **Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public) · Cloudflare Pages linked
-**Phase:** **Phases 0–2 COMPLETE.** Pipeline + browser runtime verified, 45 tests green, design foundation locked.
-**Next action:** Phase 3 — map canvas (deck.gl, all 3 maps registering)
+**Phase:** **Phases 0–3 COMPLETE.** Pipeline, runtime and map canvas verified; 60 tests green; registration confirmed visually on all 3 maps.
+**Next action:** Phase 4 — data layers (traffic, dwell, loot, kills, deaths, dead space, paths)
 
 Docs: `CONTEXT.md` (facts/decisions) · `TASKS.md` (checklist) · `BUILD_LOG.md` (activity log w/ evidence)
 
@@ -237,6 +237,7 @@ damage, or win/loss. **This telemetry cannot tell you whether anyone succeeded.*
 | 4 | "743 solo matches = low concurrency" | **Partial export.** 689 of them contain `BotKill` | Assumed export completeness |
 | 5 | "Negative space is the headline feature" | **Demoted.** Only Lockdown (65%) qualifies | Followed from correction #3 |
 | 6 | "Use `hysnappy` for Snappy decompression" | **Breaks it.** hyparquet's built-in works | Assumed the companion lib was needed |
+| 8 | "60 FPS locked" from the deck.gl perf spike | **Worthless measurement.** It ran under `--use-gl=swiftshader`, where deck.gl fires `onAfterRender` and logs no error but **draws nothing** — so it timed an empty loop. Real pacing while panning (1280x900, real GL): median **16.7 ms**, p90 31.7 ms with no data overlay, 94.1 ms with 9,739 raw points. Conclusion unchanged (median ~60 fps) but the original evidence was not evidence. **Never pass GL flags to Playwright when verifying deck.gl output.** | Trusted frame timings without looking at the rendered frame |
 | 7 | "Map coverage is 87 / 84 / 65% of playable land" — quoted as a bare figure | **Resolution-dependent.** At 64×64 with the shipped 256² mask: **83 / 65 / 55%**. At 32×32: 87 / 84 / 65%. Finer grids always read lower. **Ranking is stable — Lockdown is consistently worst — and that is the real insight.** INSIGHTS.md must state the grid resolution; the dead-space layer must use one fixed resolution. | Treated a grid-dependent statistic as an absolute |
 
 ---
@@ -485,6 +486,20 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-10 — PHASE 3 COMPLETE (map canvas)
+- `src/map/project.ts` (pure projection) + `src/ui/MapCanvas.tsx` (deck.gl OrthographicView,
+  clamped zoom, keyboard controls) + map switcher as a real radiogroup.
+- **60 tests pass** (20 pipeline + 25 runtime + 15 projection). `tsc` clean. Build clean.
+- **Registration verified by looking, on all three maps.** Grand Rift is the decisive case:
+  its POI names are printed on the art, and samples land exactly on Mine Pit, Engineer's
+  Quarters, Labour Quarters, Burnt Zone and Gas Station. Lockdown has **zero points in the
+  ocean**; Ambrose has none in the surrounding void.
+- **Correction #8 added:** the earlier "60 FPS locked" spike figure was measured under
+  SwiftShader, which renders nothing — it timed an empty loop. Real numbers now recorded.
+  This also caused an hour of false debugging: the app looked broken when only the test
+  harness was.
+- **Next: Phase 4 — data layers (traffic, dwell, loot, kills, deaths, dead space, paths).**
 
 ### 2026-09-10 — PHASE 2 COMPLETE (data runtime + design foundation)
 - `src/data/{types,loader,store,query,ingest}.ts` built. **45 tests pass** (20 pipeline + 25
