@@ -39,6 +39,50 @@
 
 ---
 
+## 2026-09-10 · Phase 3 fix — Map framing
+**Tasks:** 3.3 (revisit)   **Commit:** _(this commit)_   **Status:** DONE
+
+### Did
+Fixed a real defect spotted from a screenshot on a 1920-wide monitor: the map drew at a
+**fixed size regardless of viewport**, leaving most of a wide screen empty.
+
+Two separate causes:
+1. `initialViewState` hardcoded `zoom: 0`. Orthographic zoom is log2, so zoom 0 means one
+   world unit = one CSS pixel, and the map drew at exactly 1024px on every screen. That
+   clips a short viewport and floats in emptiness on a wide one. Replaced with `fitZoom`
+   derived from the measured element, via `ResizeObserver`.
+2. Even fitted, the framing was wrong: the minimap art is a square canvas with the island
+   painted inside it, so roughly a quarter of every image is empty margin. Now frames the
+   **UV bounds of the data** for that map instead of the image square.
+
+Zoom limits are now anchored to the fitted zoom rather than absolutes, so a small window can
+still frame the whole map and a large one cannot zoom out to a speck. A `touched` ref keeps
+a deliberate pan through a resize while still re-framing when the user has not moved.
+
+### Verified
+| Viewport | Before | After |
+|---|---|---|
+| 1920x900 | 776x844 drawn, **100% tall (clipped)**, 40% wide | 656x768, **91% tall**, 34% wide |
+| 1440x900 | 776x844, 54% wide | 656x768, 91% tall, 46% wide |
+| 1280x720 | 772x664, 60% wide | 512x604, 90% tall, 40% wide |
+
+Drawn size now scales with the viewport (656px at 848px tall, 512px at 668px tall) where
+before it was constant. 63 tests pass, `tsc` clean.
+
+### Notes
+- Remaining horizontal margin is geometric, not a bug: the data region is roughly square and
+  the viewport is 21:9. Phase 5 fills those sides with the filter rail and context panel.
+- Framing is computed from **all rows on the map**, not the filtered set, so changing a
+  filter does not make the view jump around.
+- Three new tests cover it: fit scales with viewport, degrades safely at zero size (before
+  measurement), and limits anchor to fit rather than to constants.
+
+### Files
+Modified: `src/map/project.ts` (`fitZoom`, `fitViewState`, `padBounds`, `UVBounds`) ·
+`src/map/project.test.ts` · `src/ui/MapCanvas.tsx` · `src/App.tsx`
+
+---
+
 ## 2026-09-10 · Phase 12 (early) — Deployment fixed and verified live
 **Tasks:** 12.1, 12.1a, 12.2   **Commits:** `fa8d901`, `2322633`, `d57bb47`   **Status:** DONE
 

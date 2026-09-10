@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadBundle } from './data/loader'
 import { Store } from './data/store'
 import { filterRows } from './data/query'
-import { worldToUV } from './map/project'
+import { worldToUV, padBounds } from './map/project'
+import type { UVBounds } from './map/project'
 import MapCanvas, { debugPointsLayer } from './ui/MapCanvas'
 
 type State =
@@ -80,6 +81,27 @@ function Workspace({ store }: { store: Store }) {
     return out
   }, [store, mapId, config])
 
+  /**
+   * The region this map's players actually occupy.
+   *
+   * Derived from every row on the map rather than the current filter, so the framing stays
+   * put while a designer changes filters. Framing this instead of the whole image matters
+   * because the minimap art is a square canvas with the island painted inside it: fitting
+   * the image wastes the surrounding margin and leaves the map looking like a postage stamp.
+   */
+  const focus = useMemo<UVBounds>(() => {
+    const rows = filterRows(store, { map: mapId })
+    let uMin = 1, vMin = 1, uMax = 0, vMax = 0
+    for (const r of rows) {
+      const { u, v } = worldToUV(store.cols.x[r], store.cols.z[r], config)
+      if (u < uMin) uMin = u
+      if (u > uMax) uMax = u
+      if (v < vMin) vMin = v
+      if (v > vMax) vMax = v
+    }
+    return uMax > uMin ? padBounds([uMin, vMin, uMax, vMax], 0.06) : [0, 0, 1, 1]
+  }, [store, mapId, config])
+
   const layers = showPoints ? [debugPointsLayer(points)] : []
 
   return (
@@ -114,7 +136,7 @@ function Workspace({ store }: { store: Store }) {
         </label>
       </header>
 
-      <MapCanvas mapId={mapId} config={config} layers={layers} />
+      <MapCanvas mapId={mapId} config={config} layers={layers} focus={focus} />
     </div>
   )
 }

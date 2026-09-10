@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import {
   S, worldToUV, uvToWorld, uvToWorldSpace, worldToWorldSpace, worldSpaceToUV,
-  uvToPixel, isInBounds, MAP_BOUNDS, minimapUrl, initialViewState, MIN_ZOOM, MAX_ZOOM,
+  uvToPixel, isInBounds, MAP_BOUNDS, minimapUrl, initialViewState, fitZoom, zoomLimits,
 } from './project'
 import type { MapConfig } from '../data/types'
 
@@ -134,14 +134,42 @@ describe('bounds guard', () => {
 })
 
 describe('view configuration', () => {
-  it('frames the whole map and clamps zoom so it cannot be lost off screen', () => {
-    const vs = initialViewState()
+  it('fits the map to the viewport instead of using a fixed zoom', () => {
+    // A hardcoded zoom 0 draws the map at exactly S pixels whatever the window size, which
+    // clips on a short viewport and floats in empty space on a wide one.
+    const small = fitZoom(800, 600)
+    const large = fitZoom(2560, 1400)
+    expect(large).toBeGreaterThan(small)
+
+    // At the fitted zoom the map must actually fit, with a little margin.
+    for (const [w, h] of [[1920, 900], [1440, 900], [1280, 720], [800, 600]]) {
+      const drawn = S * Math.pow(2, fitZoom(w, h))
+      expect(drawn).toBeLessThanOrEqual(Math.min(w, h))
+      expect(drawn).toBeGreaterThan(Math.min(w, h) * 0.9)
+    }
+  })
+
+  it('degrades safely before the viewport has been measured', () => {
+    expect(fitZoom(0, 0)).toBe(0)
+    expect(Number.isFinite(initialViewState().zoom)).toBe(true)
+  })
+
+  it('anchors zoom limits to the fitted zoom, not to absolutes', () => {
+    // Fixed limits would stop a small window framing the whole map, or let a large one
+    // zoom out until the map is a speck.
+    for (const [w, h] of [[1920, 900], [800, 600]]) {
+      const fit = fitZoom(w, h)
+      const { minZoom, maxZoom } = zoomLimits(w, h)
+      expect(minZoom).toBeLessThan(fit)
+      expect(maxZoom).toBeGreaterThan(fit)
+    }
+    expect(zoomLimits(1920, 900).minZoom).not.toBe(zoomLimits(800, 600).minZoom)
+  })
+
+  it('centres the framed view on the map', () => {
+    const vs = initialViewState(1440, 900)
     expect(vs.target).toEqual([S / 2, S / 2, 0])
-    expect(vs.zoom).toBe(0)
-    expect(vs.minZoom).toBe(MIN_ZOOM)
-    expect(vs.maxZoom).toBe(MAX_ZOOM)
-    expect(MIN_ZOOM).toBeLessThan(0)
-    expect(MAX_ZOOM).toBeGreaterThan(0)
+    expect(vs.zoom).toBeCloseTo(fitZoom(1440, 900), 10)
   })
 
   it('builds minimap urls from the map id', () => {

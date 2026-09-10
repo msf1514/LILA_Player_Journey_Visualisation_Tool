@@ -1,9 +1,8 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DeckGL, OrthographicView, BitmapLayer, ScatterplotLayer } from 'deck.gl'
 import type { Layer } from 'deck.gl'
-import {
-  MAP_BOUNDS, MIN_ZOOM, MAX_ZOOM, initialViewState, minimapUrl, S,
-} from '../map/project'
+import { MAP_BOUNDS, FULL_BOUNDS, initialViewState, minimapUrl, S } from '../map/project'
+import type { UVBounds } from '../map/project'
 import type { MapConfig } from '../data/types'
 
 /** deck.gl's OrthographicViewState is not exported cleanly; this is the shape we use. */
@@ -21,6 +20,11 @@ export interface MapCanvasProps {
   config: MapConfig
   /** Data layers supplied by later phases. The canvas owns the map, never the data. */
   layers?: Layer[]
+  /**
+   * UV rectangle to frame on load and on reset. Defaults to the whole map square, but the
+   * art is mostly empty margin, so callers should pass the region the data occupies.
+   */
+  focus?: UVBounds
 }
 
 /**
@@ -36,9 +40,43 @@ export interface MapCanvasProps {
  * correct on a symmetric map while being wrong everywhere else, which is the worst
  * available way for this to fail.
  */
-export default function MapCanvas({ mapId, config, layers = [] }: MapCanvasProps) {
+export default function MapCanvas({ mapId, config, layers = [], focus = FULL_BOUNDS }: MapCanvasProps) {
+  const hostRef = useRef<HTMLDivElement>(null)
+  const [size, setSize] = useState({ width: 0, height: 0 })
   const [viewState, setViewState] = useState<ViewState>(() => initialViewState())
   const [imageError, setImageError] = useState<string | null>(null)
+  // Whether the user has moved the view. Until they do, a resize should re-fit; after they
+  // have panned or zoomed deliberately, a resize must not yank their view back.
+  const touched = useRef(false)
+
+  // Measure the host element and keep the framing in step with it. useLayoutEffect so the
+  // first paint already has the right zoom rather than flashing an unfitted map.
+  const focusKey = focus.join(',')
+
+  useLayoutEffect(() => {
+    const el = hostRef.current
+    if (!el) return
+    const apply = (width: number, height: number) => {
+      setSize({ width, height })
+      const framed = initialViewState(width, height, focus)
+      setViewState((v) =>
+        // Keep a deliberate pan/zoom through a resize, but always refresh the limits so
+        // they stay anchored to the new fit. Re-frame only if the user has not moved.
+        touched.current
+          ? { ...v, minZoom: framed.minZoom, maxZoom: framed.maxZoom }
+          : { ...framed, transitionDuration: 0 },
+      )
+    }
+    const r = el.getBoundingClientRect()
+    apply(r.width, r.height)
+    const ro = new ResizeObserver(([entry]) => apply(entry.contentRect.width, entry.contentRect.height))
+    ro.observe(el)
+    return () => ro.disconnect()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusKey])
+
+  // Switching map re-frames, because each map's data occupies a different region.
+  useLayoutEffect(() => { touched.current = false }, [mapId])
 
   // Recreated only when the map changes, not on every pan frame.
   const view = useMemo(() => new OrthographicView({ id: 'ortho', flipY: false }), [])
@@ -46,13 +84,15 @@ export default function MapCanvas({ mapId, config, layers = [] }: MapCanvasProps
   const onViewStateChange = useCallback(({ viewState: next }: { viewState: ViewState }) => {
     // Panning is continuous input. It is never eased: adding a transition here puts lag
     // between the designer's hand and the map.
+    touched.current = true
     setViewState({ ...next, transitionDuration: 0 })
   }, [])
 
   const reset = useCallback(() => {
     // Reset is an occasional action, so it is the one place a transition earns its keep.
-    setViewState({ ...initialViewState(), transitionDuration: 220 })
-  }, [])
+    touched.current = false
+    setViewState({ ...initialViewState(size.width, size.height, focus), transitionDuration: 220 })
+  }, [size.width, size.height, focusKey])
 
   const minimap = useMemo(
     () =>
@@ -68,7 +108,7 @@ export default function MapCanvas({ mapId, config, layers = [] }: MapCanvasProps
   )
 
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%', background: 'var(--bg-0)' }}>
+    <div ref={hostRef} style={{ position: 'relative', width: '100%', height: '100%', background: 'var(--bg-0)' }}>
       <DeckGL
         views={view}
         viewState={viewState}
@@ -81,12 +121,17 @@ export default function MapCanvas({ mapId, config, layers = [] }: MapCanvasProps
 
       <ViewControls
         zoom={viewState.zoom}
+        limits={{ minZoom: viewState.minZoom ?? -Infinity, maxZoom: viewState.maxZoom ?? Infinity }}
         onZoom={(delta) =>
-          setViewState((v) => ({
-            ...v,
-            zoom: Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, v.zoom + delta)),
-            transitionDuration: 0,
-          }))
+          setViewState((v) => {
+            touched.current = true
+            const { minZoom, maxZoom } = initialViewState(size.width, size.height, focus)
+            return {
+              ...v,
+              zoom: Math.min(maxZoom, Math.max(minZoom, v.zoom + delta)),
+              transitionDuration: 0,
+            }
+          })
         }
         onReset={reset}
       />
@@ -106,8 +151,13 @@ export default function MapCanvas({ mapId, config, layers = [] }: MapCanvasProps
 }
 
 function ViewControls({
-  zoom, onZoom, onReset,
-}: { zoom: number; onZoom: (delta: number) => void; onReset: () => void }) {
+  zoom, limits, onZoom, onReset,
+}: {
+  zoom: number
+  limits: { minZoom: number; maxZoom: number }
+  onZoom: (delta: number) => void
+  onReset: () => void
+}) {
   return (
     <div
       role="group"
@@ -117,8 +167,8 @@ function ViewControls({
         display: 'grid', gap: 'var(--space-1)', justifyItems: 'stretch',
       }}
     >
-      <ControlButton label="Zoom in" onClick={() => onZoom(0.5)} disabled={zoom >= MAX_ZOOM}>+</ControlButton>
-      <ControlButton label="Zoom out" onClick={() => onZoom(-0.5)} disabled={zoom <= MIN_ZOOM}>−</ControlButton>
+      <ControlButton label="Zoom in" onClick={() => onZoom(0.5)} disabled={zoom >= limits.maxZoom}>+</ControlButton>
+      <ControlButton label="Zoom out" onClick={() => onZoom(-0.5)} disabled={zoom <= limits.minZoom}>−</ControlButton>
       <ControlButton label="Reset view" onClick={onReset} wide>Reset</ControlButton>
     </div>
   )

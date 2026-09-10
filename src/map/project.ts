@@ -95,16 +95,88 @@ export function minimapUrl(mapId: string, base = import.meta.env.BASE_URL ?? '/'
 }
 
 /**
- * Zoom limits.
- *
- * Clamped so a designer cannot lose the map off screen. `MIN_ZOOM` keeps the whole map
- * larger than a fraction of the viewport; `MAX_ZOOM` stops at roughly 8x, past which the
- * 2048px source starts to soften and the view stops being useful.
+ * Fraction of the viewport the framed map occupies, leaving a small breathing margin.
  */
-export const MIN_ZOOM = -1.5
-export const MAX_ZOOM = 3
+const FIT_PADDING = 0.94
 
-/** The view state that frames the whole map. Also what the reset control returns to. */
-export function initialViewState() {
-  return { target: [S / 2, S / 2, 0] as [number, number, number], zoom: 0, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM }
+/**
+ * Zoom that fits the whole map into a viewport of the given size.
+ *
+ * OrthographicView zoom is log2: at zoom 0 one world unit is one CSS pixel, so the S-unit
+ * map would always draw at exactly S pixels regardless of window size. That is wrong in
+ * both directions -- it clips on a short window and floats in a sea of empty space on a
+ * wide one -- so the framing zoom has to be derived from the viewport, not hardcoded.
+ *
+ * The map is square, so the limiting dimension is the smaller one. On a wide screen this
+ * necessarily leaves margins left and right; those are where the filter rail and context
+ * panel live once later phases fill them in.
+ */
+export function fitZoom(width: number, height: number): number {
+  if (!(width > 0) || !(height > 0)) return 0
+  return Math.log2((Math.min(width, height) * FIT_PADDING) / S)
+}
+
+/**
+ * Zoom limits, expressed relative to the fitted zoom rather than as absolutes.
+ *
+ * A fixed `minZoom` would either prevent a small window from framing the whole map, or let
+ * a large one zoom out until the map is a speck. Anchoring to fit means "you may zoom out
+ * a little past the framed view, and in to roughly 16x" on every screen size.
+ */
+export const MIN_ZOOM_BELOW_FIT = 0.6
+export const MAX_ZOOM_ABOVE_FIT = 4
+
+export function zoomLimits(width: number, height: number) {
+  const fit = fitZoom(width, height)
+  return { minZoom: fit - MIN_ZOOM_BELOW_FIT, maxZoom: fit + MAX_ZOOM_ABOVE_FIT }
+}
+
+/** A rectangle in UV space: [uMin, vMin, uMax, vMax]. */
+export type UVBounds = [number, number, number, number]
+
+/** The whole map square. */
+export const FULL_BOUNDS: UVBounds = [0, 0, 1, 1]
+
+/**
+ * Frame an arbitrary UV rectangle rather than the whole map square.
+ *
+ * This matters because the minimap art is mostly empty. Each image is a square canvas with
+ * the island painted inside it, so the playable area is only about three quarters of the
+ * frame on Ambrose and less elsewhere. Fitting the square wastes that margin twice over --
+ * once vertically, and again horizontally on a wide monitor -- and leaves the map looking
+ * like a postage stamp in a field of black.
+ *
+ * Framing the region the data actually occupies uses the screen for the part a designer
+ * came to look at.
+ */
+export function fitViewState(width: number, height: number, bounds: UVBounds = FULL_BOUNDS) {
+  const [uMin, vMin, uMax, vMax] = bounds
+  const bw = Math.max(uMax - uMin, 1e-6) * S
+  const bh = Math.max(vMax - vMin, 1e-6) * S
+  const zoom =
+    width > 0 && height > 0
+      ? Math.log2(Math.min((width * FIT_PADDING) / bw, (height * FIT_PADDING) / bh))
+      : 0
+  return {
+    target: [((uMin + uMax) / 2) * S, ((vMin + vMax) / 2) * S, 0] as [number, number, number],
+    zoom,
+    minZoom: zoom - MIN_ZOOM_BELOW_FIT,
+    maxZoom: zoom + MAX_ZOOM_ABOVE_FIT,
+  }
+}
+
+/** Grow a bounds rectangle by a fraction of its size, clamped to the map square. */
+export function padBounds(b: UVBounds, pad = 0.04): UVBounds {
+  const [uMin, vMin, uMax, vMax] = b
+  const du = (uMax - uMin) * pad
+  const dv = (vMax - vMin) * pad
+  return [
+    Math.max(0, uMin - du), Math.max(0, vMin - dv),
+    Math.min(1, uMax + du), Math.min(1, vMax + dv),
+  ]
+}
+
+/** The view state that frames the map. Also what the reset control returns to. */
+export function initialViewState(width = 0, height = 0, bounds: UVBounds = FULL_BOUNDS) {
+  return fitViewState(width, height, bounds)
 }
