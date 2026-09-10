@@ -97,12 +97,12 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 5.1 | Map selector | S | Ambrose (566 matches) · Lockdown (171) · GrandRift (59). Show match counts so under-tested maps are visible. | `TODO` |
-| 5.2 | Date range | S | **Default = ALL DAYS combined (D17).** Narrowing to one day is the deliberate action. Derive dates from `ts`, not folder names. | `TODO` |
-| 5.3 | Match selector | M | Searchable. **Surface the ~53 multi-participant matches** — 743 of 796 are single-file, so a naive picker drops designers into a lonely single dot. | `TODO` |
-| 5.4 | Actor filter | S | Humans / bots / both. | `TODO` |
-| 5.5 | Event-type toggles | S | Per event type, with live counts. | `TODO` |
-| 5.6 | Filter rail UI + active-filter chips | M | Left rail. Chips showing what's active, each clearable. Reset-all button. | `TODO` |
+| 5.1 | Map selector | S | Ambrose (566 matches) · Lockdown (171) · GrandRift (59). Show match counts so under-tested maps are visible. | `DONE` |
+| 5.2 | Date range | S | **Default = ALL DAYS combined (D17).** Narrowing to one day is the deliberate action. Derive dates from `ts`, not folder names. | `DONE` |
+| 5.3 | Match selector | M | Searchable. **Surface the ~53 multi-participant matches** — 743 of 796 are single-file, so a naive picker drops designers into a lonely single dot. | `DONE` |
+| 5.4 | Actor filter | S | Humans / bots / both. | `DONE` |
+| 5.5 | Event-type toggles | S | Per event type, with live counts. | `DONE` |
+| 5.6 | Filter rail UI + active-filter chips | M | Left rail. Chips showing what's active, each clearable. Reset-all button. | `DONE` |
 
 ---
 

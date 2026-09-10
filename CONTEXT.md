@@ -56,8 +56,8 @@ produces a finding, a decision, a correction, code, or progress.
 **Deadline:** 5 days from receipt · **Effort budget:** no fixed hour cap (D19); deadline is the constraint
 **Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public)
 **Live:** https://lila-pjvt.msf1514.workers.dev — Cloudflare Worker + Static Assets, auto-deploys on push to `main`
-**Phase:** **Phases 0–4 COMPLETE.** Pipeline, runtime, canvas and eight data layers verified; 63 tests green; 57 fps with all layers on.
-**Next action:** Phase 5 — filters (map, date, match, actor, event type)
+**Phase:** **Phases 0–5 COMPLETE.** Pipeline, runtime, canvas, eight layers and the filter rail verified; 63 tests green.
+**Next action:** Phase 6 — timeline on match-elapsed time, plus playback
 
 Docs: `CONTEXT.md` (facts/decisions) · `TASKS.md` (checklist) · `BUILD_LOG.md` (activity log w/ evidence)
 
@@ -488,6 +488,22 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-11 - PHASE 5 COMPLETE (filter rail)
+- Filter rail (map, day, match, actor, events) + active-filter chips + empty state.
+  One `filterRows` call per change; every layer, count and stat derives from that one result.
+- Verified narrowing: all days 60,925 rows / 83% coverage -> +10 Feb 23,985 / 77% ->
+  +bots only 6,126 / 56% -> +one match 932 rows, 15 journeys / 16%. Chips tracked exactly.
+- Filter change with both heatmaps on: **160 ms median**. Keyboard: one tab stop per group,
+  arrows cycle. 63 tests pass, tsc clean, zero console errors.
+- **Bug found in verification:** filtering events to Loot only removed all position rows, and
+  the strip then claimed "coverage 0% of playable land" - stating a measurement never taken.
+  Now reports "coverage needs position events" instead.
+- Match picker surfaces the 53 multi-participant matches first with journey counts, so a
+  designer can tell a 15-journey match from a 1-journey one before clicking.
+- Event counts deliberately exclude the event filter itself, so a zero means "none here", not
+  "switched off". Matters given 12,866 loot events against 3 PvP kills.
+- **Next: Phase 6 - timeline on match-elapsed time, plus playback.**
 
 ### 2026-09-10 - PHASE 4 COMPLETE (data layers)
 - Eight composable layers with an always-visible legend: traffic, dwell, loot, kills (vs bots),

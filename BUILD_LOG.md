@@ -39,6 +39,66 @@
 
 ---
 
+## 2026-09-11 - Phase 5 - Filter rail
+**Tasks:** 5.1 - 5.6   **Commit:** _(this commit)_   **Status:** DONE
+
+### Did
+- `src/ui/FilterRail.tsx` - map, day, match, actor and event filters in a left rail.
+- `src/ui/FilterChips.tsx` - one clearable chip per active filter, plus clear-all. Renders
+  nothing when nothing is filtered.
+- `src/App.tsx` - a single `Filter` object in state, ONE `filterRows` call, every layer,
+  count and stat derived from that one result. Map selector moved out of the header.
+- App shell is now a CSS grid: header, rail, canvas, stats strip.
+
+### Verified
+| Check | Result |
+|---|---|
+| `npm test` | 63 passed |
+| `npx tsc -b` | exit 0 |
+| Console errors | none across every filter combination exercised |
+| Filter change, both heatmaps on | **160 ms median** over five day switches |
+| Keyboard | first Tab lands on the map group, arrows cycle Ambrose to Grand Rift to Lockdown, exactly one tab stop |
+
+Filters narrow monotonically and compose correctly:
+
+| Filter | rows | loot | kills | journeys | coverage |
+|---|---|---|---|---|---|
+| Default (all days) | 60,925 | 9,936 | 1,794 | 986 | 83% |
+| + 10 Feb | 23,985 | 3,669 | 738 | 376 | 77% |
+| + bots only | 6,126 | 33 | 57 | 137 | 56% |
+| + one match | 932 | 4 | 3 | 15 | 16% |
+
+Chips tracked exactly: `10 Feb`, `Match 41d4555d`, `Bots only`, `Clear all`.
+Empty state confirmed on Grand Rift plus 9 Feb: "No events on Grand Rift with the selected
+day", with buttons to clear the day or clear everything.
+
+### Notes
+- **Event counts exclude the event filter itself.** Verified: unchecking every type except
+  Loot left the other counts unchanged (Kill vs player still reads 2). If the filter applied
+  to its own counts, a zero would mean "you switched it off" rather than "none of these
+  happened here", and on this data the second reading is the one that matters.
+- **Bug found and fixed during verification: coverage claimed 0%.** Filtering events down to
+  Loot removes all position rows, and coverage is computed from position data, so the strip
+  read "coverage 0% of playable land". That states a measurement that was never taken and
+  reads as "players visited none of this map". Now returns null and the strip says
+  "coverage needs position events".
+- Paths filter by whole journey, never by trimming points. A part-filtered path would draw a
+  fragment and imply the player stopped where the filter did.
+- Framing follows the map, not the filter: re-fitting on every filter change would make the
+  map jump and make two filtered views impossible to compare by eye.
+- The day filter is single-select although the data layer supports a range. Six days means a
+  designer picks one or looks at everything; two range dropdowns would be fiddlier for a case
+  that barely arises. Range support stays in the query layer for Phase 7's comparison view.
+- `Position` and `BotPosition` have no marker style, so they were falling back to raw names in
+  the event list. Given friendly labels in the rail rather than editing `layers.ts`, which was
+  outside this phase's scope.
+
+### Files
+Created: `src/ui/FilterRail.tsx` - `src/ui/FilterChips.tsx`
+Modified: `src/App.tsx` - `src/ui/controls.css`
+
+---
+
 ## 2026-09-10 - Phase 4 - Data layers
 **Tasks:** 4.1 - 4.10   **Commit:** _(this commit)_   **Status:** DONE
 
