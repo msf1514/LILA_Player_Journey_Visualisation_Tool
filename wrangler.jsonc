@@ -13,6 +13,19 @@
   "name": "lila-pjvt",
   "compatibility_date": "2026-09-01",
 
+  // Wrangler runs this before deploying, so `dist/` always exists by the time the assets
+  // directory is read.
+  //
+  // This lives here rather than in the Cloudflare dashboard on purpose. The first CI run
+  // failed because the dashboard had a deploy command but no build command, so it ran
+  // `wrangler deploy` against a `dist/` that had never been built. Configuration that
+  // lives only in a web UI is invisible to the repo, cannot be reviewed, and breaks
+  // silently when someone re-creates the project. Keeping it here means a clean clone
+  // deploys correctly no matter what the dashboard says.
+  "build": {
+    "command": "npm run build"
+  },
+
   "assets": {
     "directory": "./dist",
 

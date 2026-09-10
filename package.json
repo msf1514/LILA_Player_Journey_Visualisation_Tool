@@ -12,7 +12,7 @@
     "build": "tsc -b --noCheck && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "wrangler deploy",
     "preview:remote": "wrangler dev"
   },
   "dependencies": {
