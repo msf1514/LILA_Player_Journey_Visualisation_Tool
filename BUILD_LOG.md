@@ -39,6 +39,129 @@
 
 ---
 
+## 2026-09-10 · Phase 2 — Data runtime + design foundation
+**Tasks:** 2.1 – 2.5, 10.0   **Commit:** _(this commit)_   **Status:** DONE
+
+### Did
+**Data runtime** (`src/data/`)
+- `types.ts` — columnar types. Rows are held in typed arrays, not row objects: at 89,016 rows
+  an object-per-row would be ~89k allocations and roughly 20x the memory.
+- `loader.ts` — two parallel fetches, then nine typed-array **views onto one ArrayBuffer**.
+  No copying; memory cost is the 2.1 MB payload itself. Throws a clear, actionable error when
+  `bundle.bin` and `meta.json` disagree on row count.
+- `store.ts` — builds indices in one pass: contiguous map ranges, per-match row lists,
+  1,242 journey runs, matches-by-date. Exposes `multiParticipantMatches()` so the UI can
+  surface the 53 matches worth replaying instead of the 743 with a single lonely dot.
+- `query.ts` — `filterRows` (narrows by map range first, then scans) and `aggregate` with
+  three genuinely different modes, plus `diffGrids` and `deadSpace`.
+- `ingest.ts` — drop-zone parsing that imports the **same `pipeline/transform.mjs`** the build
+  uses. Collects per-file failures rather than throwing, so one truncated file in a dropped
+  folder of 300 does not lose the other 299.
+- `runtime.test.ts` — 25 tests proving the browser layer agrees with the pipeline.
+
+**Design foundation** (`src/design/tokens.css`) — see decisions D20–D23.
+
+### Verified
+| Check | Result |
+|---|---|
+| `npm test` | **45 tests passed** (20 pipeline + 25 runtime), 3.94s |
+| `tsc -b` | exit 0, clean |
+| `npm run build` | ✅ 2.17s · JS 229.70 kB → **71.84 kB gz** · CSS 12.81 kB → 2.42 kB gz |
+| Browser render (Playwright, built output) | **zero console errors**, page interactive in 1,994 ms |
+| Bundle decode in-browser | **50 ms** for 89,016 rows |
+| Store indices | 1,242 journeys (one per unique file) · 94 bots / 245 humans · 53 multi-participant matches · largest has 16 journeys |
+| Event counts after round-trip | identical to the pipeline, event for event |
+
+### Notes
+- **Traffic and dwell are provably different layers, not a stylistic choice.** A test asserts
+  their *peak cells differ* on the same filtered rows. Traffic counts each actor once per cell
+  ("how many came through"); dwell weights by the gap each sample represents ("how long they
+  stayed"). A corridor and a camp spot are opposite design problems, and one blended density
+  map hides both. Dwell weight is capped at 30s per sample so a 518s gap cannot dominate a map.
+- **The diff view normalises to share of total, and a test enforces it.** Halving the sample of
+  an identical distribution must read as ~zero change (asserted `< 0.05`). Without this, the
+  real volume decline from 98 to 47 daily players would paint every comparison "less
+  everywhere", and a designer would read that as their map being abandoned.
+- `deadSpace` returns the grid `size` it used alongside the coverage figure, because coverage
+  is resolution-dependent (correction #7). A test confirms Lockdown ranks least-covered, which
+  is the durable finding; the bare percentage is not.
+- Two authoring slips caught and fixed before commit: a placeholder hex (`#1d3away`) in the
+  token file and a stray `building:` label in `ingest.ts`. Both would have failed loudly, but
+  they are logged because they were mine, not the data's.
+
+### Files
+Created: `src/design/tokens.css` · `src/data/{types,loader,store,query,ingest}.ts` ·
+`src/data/runtime.test.ts`
+Modified: `src/App.tsx` (Phase 2 checkpoint screen, replaced in Phase 3) · `src/main.tsx`
+Removed: `src/index.css` (superseded by the token file)
+Added deps: `@fontsource/ibm-plex-sans`, `@fontsource/ibm-plex-mono`
+
+---
+
+## 2026-09-10 · Tooling — Skill installation (curated)
+**Tasks:** n/a (tooling)   **Commit:** _none — installed outside the repo_   **Status:** DONE
+
+### Did
+Installed **11 of the 55** available skills to the **user-level** directory
+`C:\Users\msf15\.claude\skills\` — deliberately *not* into the repo, so the deliverable stays
+clean and contains only the tool.
+
+| Skill | Why it earns a slot on this project |
+|---|---|
+| `webapp-testing` | Playwright toolkit — already the method used to verify deck.gl registration and measure the 60 FPS scrub |
+| `web-design-guidelines` | UI/accessibility review. We have a hard colour-blind-safety requirement (D: markers differ by shape as well as colour) |
+| `writing-guidelines` | Four docs to write, and **Communication is an explicitly scored criterion** |
+| `pick-ui-library` | Covers charts, virtualisation, command menus — the filter rail and match picker need real choices |
+| `vercel-react-best-practices` | React performance patterns; host-agnostic despite the name |
+| `refero-design` | Self-describes as primary for **dashboards and product screens**, which is exactly this tool. Degrades gracefully without its MCP |
+| `design-taste-frontend` | Anti-slop pass — avoids the generic AI look that would undercut the polish score |
+| `frontend-reviewer` | Self-contained 90-line review checklist (verified: no dependencies on uninstalled skills) |
+| `emil-design-eng` | UI polish bar — the "feels finished" standard the brief rewards |
+| `prototype` | Renders several genuinely different UI variants behind a picker; useful for settling the main layout |
+| `prompt-master` | From `prompt-master-main.zip`; activates only on explicit prompt-engineering requests |
+
+### Verified
+- All 11 have valid `name:` + `description:` frontmatter.
+- 18 user-level skills total, 989 KB.
+- `refero-design` checked for a hard MCP dependency — it explicitly falls back to bundled craft
+  references when the MCP is unavailable, so it is safe to install.
+- `frontend-reviewer` / `frontend-designer` are "house skills for WeWood" (another org).
+  `frontend-reviewer` grep'd for references to other skills: none — self-contained, so installed.
+
+### Notes — why NOT all 55
+Skill descriptions load into context every session, so an unfiltered install costs tokens and,
+worse, causes misfires. Three exclusion groups:
+
+1. **Contradictory design directions** — `gpt-taste` (AIDA landing-page structure), `minimalist-ui`
+   (editorial), `industrial-brutalist-ui`, `high-end-visual-design`, `apple-design`,
+   `stitch-design-taste`, `impeccable`, `frontend-designer`. Installing several taste skills at
+   once pulls the UI in conflicting directions. This tool should read as a **professional dark
+   instrument** (Figma/Linear/Unity), not a marketing page — so one dashboard-oriented direction
+   (`refero-design`) plus one anti-slop pass (`design-taste-frontend`) is the coherent choice.
+2. **Wrong stack** — `deploy-to-vercel`, `vercel-cli-with-tokens`, `vercel-optimize` (we deploy to
+   **Cloudflare Pages**); `shadcn-ui-design-validator`, `component-aesthetic-checker`,
+   `ask-sonner` (we build custom UI over deck.gl, not shadcn); `animate-expo`,
+   `vercel-react-native-skills`, `write-swift` (not mobile/native).
+   `edge-performance-optimizer` targets Cloudflare **Workers**; Pages here is static — skipped.
+3. **Unrelated domain** — `competitive-ads-extractor`, `lead-research-assistant`, `brandkit`,
+   `brand-guidelines`, `canvas-design`, `imagegen-*`, `mcp-builder`, `composio-app-automations`,
+   `content-research-writer`, `conversation-analyzer`, `workflow-pattern-analyzer`.
+
+Animation skills (`animate`, `improve-animations`, `review-animations`,
+`vercel-react-view-transitions`) were judged marginal: deck.gl drives the timeline scrub and
+playback natively. Easy to add later if motion polish needs them.
+
+All 11 registered immediately (no session restart needed). Nine are model-invocable; two —
+`pick-ui-library` and `prototype` — carry `disable-model-invocation: true` in their own
+frontmatter, so by their authors' design they are **user-invoked only** via `/pick-ui-library`
+and `/prototype`. Installed and working, just not auto-triggered.
+
+### Files
+Installed to `C:\Users\msf15\.claude\skills\` (outside the repo — nothing committed).
+Source: `D:\Lila\skills\` (55 available) and `D:\Lila\prompt-master-main.zip`.
+
+---
+
 ## 2026-09-10 · Phase 1 — Data pipeline + golden tests
 **Tasks:** 1.1 – 1.6, T1 – T6   **Commit:** _(this commit)_   **Status:** DONE
 

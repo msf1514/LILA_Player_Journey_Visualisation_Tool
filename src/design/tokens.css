@@ -1,0 +1,186 @@
+/*
+ * tokens.css — the design foundation.
+ *
+ * READ THIS BEFORE CHANGING A COLOUR OR A FONT.
+ *
+ * What this interface is: a professional instrument for level designers, closer to Figma,
+ * Linear or a flight-tracker than to a marketing site. It is read for long stretches, at
+ * high information density, by someone looking for an anomaly on a map. That shapes every
+ * choice below and overrides several conventions that suit landing pages but not this.
+ *
+ * ── TYPOGRAPHY ───────────────────────────────────────────────────────────────
+ * IBM Plex Sans + IBM Plex Mono, self-hosted (no Google Fonts round-trip, no FOUT).
+ *
+ * Why not Inter: it is the default of defaults and reads as unconsidered.
+ * Why not a display face (Clash, Cabinet, Outfit): those earn their keep in a hero. Here
+ *   every string is a label, a count or a timestamp at 11-13px. Character is a liability.
+ * Why Plex specifically: IBM drew it for technical and data-dense interfaces. It is a
+ *   humanist grotesque, so it reads warm rather than clinical at small sizes, its numerals
+ *   are unambiguous (a real 1, a slashed-free but distinct 7), and Plex Mono is a true
+ *   metric companion rather than a bolted-on mono. Open source, no licensing risk.
+ *
+ * Mono is not decorative here. Every number a designer compares -- match durations, event
+ * counts, coordinates, timestamps -- is set in tabular figures so digits align in a column.
+ * Proportional numerals in a stats panel make two values impossible to compare by eye.
+ *
+ * ── COLOUR ───────────────────────────────────────────────────────────────────
+ * Two separate systems, deliberately. Conflating them is how data tools end up unreadable.
+ *
+ *   1. CHROME  — the interface around the map. Cool neutral greys, one accent (#3A8FD9)
+ *      used only for selection and focus. Nothing decorative competes with the map.
+ *
+ *   2. DATA    — semantic encodings drawn from the Okabe-Ito colour-blind-safe palette.
+ *      These are not brand colours and are exempt from the usual "one accent" rule: each
+ *      hue *means* something, and a designer must separate six categories at a glance.
+ *      Okabe-Ito is engineered to stay distinguishable under protanopia, deuteranopia and
+ *      tritanopia. Colour is still never the only channel -- every marker also differs by
+ *      shape (see EVENTS in pipeline/transform.mjs).
+ *
+ * Bans observed: no pure #000000 (crushes against the map art and reads harsh), no
+ * purple-to-blue gradients, no neon glow, no untinted black shadows.
+ *
+ * Note on purple: the earlier draft used #b06cff for storm deaths. Dropped. It sat close
+ * to the AI-purple tell, and yellow carries "environmental hazard" far better anyway.
+ */
+
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';
+
+:root {
+  /* ── Type ───────────────────────────────────────────────────────────── */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Tight scale. A dense tool needs few sizes, not a marketing-page ladder. */
+  --text-xs:   11px;   /* dense labels, axis ticks, chips */
+  --text-sm:   12px;   /* default UI text */
+  --text-base: 13px;   /* body, panel copy */
+  --text-md:   15px;   /* panel headings */
+  --text-lg:   19px;   /* the few real headings */
+  --text-xl:   26px;   /* headline stats */
+
+  /* Leading tightens as size grows; tracking loosens as size shrinks. */
+  --leading-tight: 1.15;
+  --leading-ui:    1.35;
+  --leading-body:  1.6;
+  --tracking-tight: -0.015em;   /* large text only */
+  --tracking-wide:   0.02em;    /* 11px labels only */
+
+  /* ── Chrome: cool neutrals. Never mix a warm grey into this ramp. ───── */
+  --bg-0:  #0d1015;   /* app ground -- off-black, not #000 */
+  --bg-1:  #12161d;   /* panels */
+  --bg-2:  #181d26;   /* raised surfaces, inputs */
+  --bg-3:  #1f2531;   /* hover */
+  --line:  #262e3b;   /* hairlines */
+  --line-strong: #38424f;
+
+  --text-1: #e7ecf3;  /* primary */
+  --text-2: #a3aec0;  /* secondary */
+  --text-3: #6b7789;  /* tertiary, disabled */
+
+  /* One chrome accent. Selection and focus only, never decoration. */
+  --accent:      #3a8fd9;
+  --accent-weak: #1d3a55;
+  --accent-soft: rgba(58, 143, 217, 0.16);
+  --focus-ring:  #5aa9ec;
+
+  /* ── Data: Okabe-Ito, colour-blind safe ─────────────────────────────── */
+  --actor-human: #56b4e9;   /* sky blue      -- human player */
+  --actor-bot:   #e69f00;   /* orange        -- bot */
+  --ev-loot:     #009e73;   /* bluish green  -- pickup */
+  --ev-kill:     #d55e00;   /* vermillion    -- this player killed something */
+  --ev-death:    #cc79a7;   /* reddish purple-- this player died */
+  --ev-storm:    #f0e442;   /* yellow        -- environmental hazard */
+  --ev-unknown:  #94a3b8;   /* neutral       -- event types we have never seen */
+
+  /* Heat ramps. Perceptually ordered, and distinct per layer so two heatmaps are
+     never confused when toggled in sequence. Sampled in JS, declared here so the
+     legend and the canvas cannot drift apart. */
+  --heat-traffic-0: #12161d;
+  --heat-traffic-1: #1b3a5c;
+  --heat-traffic-2: #1f6f9c;
+  --heat-traffic-3: #35b3c4;
+  --heat-traffic-4: #a7f0d1;
+
+  --heat-dwell-0: #12161d;
+  --heat-dwell-1: #4a2a17;
+  --heat-dwell-2: #96481a;
+  --heat-dwell-3: #db7f1f;
+  --heat-dwell-4: #ffd98a;
+
+  /* Diff view: red = more now, blue = less now, near-transparent = unchanged.
+     Diverging and symmetric so neither direction reads as louder than the other. */
+  --diff-neg: #4b8fd0;
+  --diff-mid: rgba(255, 255, 255, 0.04);
+  --diff-pos: #e2603c;
+
+  /* ── Shape, depth, motion ───────────────────────────────────────────── */
+  --radius-sm: 3px;
+  --radius:    5px;
+  --radius-lg: 8px;
+
+  /* Shadows tinted to the ground hue, never pure black. */
+  --shadow-1: 0 1px 2px rgba(6, 9, 14, 0.55);
+  --shadow-2: 0 6px 20px rgba(6, 9, 14, 0.6);
+
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px;
+
+  /* Built-in CSS easings are weak. Named curves keep timing coherent across the app. */
+  --ease-out:    cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+
+  /* Motion budget is deliberately small. A designer toggles layers and scrubs a
+     timeline dozens of times a minute; animating those would fight the user.
+     Data the user reads never moves for style. */
+  --dur-instant: 80ms;    /* hover, press */
+  --dur-quick:   140ms;   /* panel open, chip change */
+  --dur-panel:   220ms;   /* drawer, overlay -- the ceiling */
+
+  color-scheme: dark;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--leading-ui);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Every number in this app is compared against another number. Tabular by default. */
+.num, input[type='number'], table td, .stat {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Focus is an accessibility requirement, not a style choice. Applies to custom
+   controls too, which is where it is usually forgotten. */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+::selection { background: var(--accent-soft); color: var(--text-1); }
+
+/* Reduced motion means fewer and gentler, not zero: colour and opacity changes that
+   aid comprehension stay, movement goes. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

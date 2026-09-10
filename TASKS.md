@@ -57,11 +57,11 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 2.1 | `src/data/loader.ts` | S | Fetch `bundle.bin` + `meta.json`, decode into typed arrays. Single request, no backend. | `TODO` |
-| 2.2 | `src/data/store.ts` | M | In-memory columnar store + prebuilt indices: by map, by match, by date, by event, by actor type. 89k rows — indices keep filtering sub-5ms. | `TODO` |
-| 2.3 | `src/data/query.ts` | L | `filter(criteria) → Uint32Array of row indices`, then `aggregate(indices, mode) → grid`. Aggregation modes: **traffic** (unique player-passes) vs **dwell** (time-weighted) — see 4.1/4.2. | `TODO` |
-| 2.4 | `src/data/ingest.ts` — drag-drop | M | Accept `.nakama-0` files or a folder. Runs the **same `transform.mjs`**. Merge into store, persist in IndexedDB. Proves the pipeline is real, not a hardcoded fixture. | `TODO` |
-| 2.5 | Unknown-event tolerance | S | Unrecognised event names render as neutral markers and appear in the legend — never throw (D10). There is **no `Extracted` event** today; when LILA adds one, the tool must not break. | `TODO` |
+| 2.1 | `src/data/loader.ts` | S | Fetch `bundle.bin` + `meta.json`, decode into typed arrays. Single request, no backend. | `DONE` |
+| 2.2 | `src/data/store.ts` | M | In-memory columnar store + prebuilt indices: by map, by match, by date, by event, by actor type. 89k rows — indices keep filtering sub-5ms. | `DONE` |
+| 2.3 | `src/data/query.ts` | L | `filter(criteria) → Uint32Array of row indices`, then `aggregate(indices, mode) → grid`. Aggregation modes: **traffic** (unique player-passes) vs **dwell** (time-weighted) — see 4.1/4.2. | `DONE` |
+| 2.4 | `src/data/ingest.ts` — drag-drop | M | Accept `.nakama-0` files or a folder. Runs the **same `transform.mjs`**. Merge into store, persist in IndexedDB. Proves the pipeline is real, not a hardcoded fixture. | `DONE` |
+| 2.5 | Unknown-event tolerance | S | Unrecognised event names render as neutral markers and appear in the legend — never throw (D10). There is **no `Extracted` event** today; when LILA adds one, the tool must not break. | `DONE` |
 
 ---
 
@@ -159,6 +159,7 @@
 | 10.1 | **Data honesty banner** | S | Visible counts including the uncomfortable ones: **3 PvP events · 39 storm deaths · 779/780 matches have 1 human.** Never hide the gaps. | `TODO` |
 | 10.2 | Empty / loading / error states | M | "No data for this filter" with a reset action. Skeleton on load. Graceful parse-failure message. | `TODO` |
 | 10.3 | Onboarding hint | S | First-open tooltip: what am I looking at, what should I click. Designers, not data scientists. | `TODO` |
+| 10.0 | **Design foundation** (tokens: type + colour + motion) | M | ✅ `src/design/tokens.css`. IBM Plex Sans/Mono self-hosted; Okabe-Ito colour-blind-safe data palette; chrome/data colour systems kept separate; motion budget capped at 220ms. | `DONE` |
 | 10.4 | Visual design pass | L | Dark theme (matches game tooling). Consistent spacing, type scale, restrained colour so the *map* is the loudest thing on screen. | `TODO` |
 | 10.5 | Performance check | S | Verified 60 FPS on software rendering in the spike. Re-verify with all layers live. | `TODO` |
 | 10.6 | Keyboard shortcuts | S | Space = play/pause, arrows = scrub, `R` = reset. | `TODO` |

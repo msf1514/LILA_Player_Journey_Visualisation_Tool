@@ -53,9 +53,12 @@ produces a finding, a decision, a correction, code, or progress.
 
 **Project:** LILA Games — Product Engineer Written Test
 **Deliverable:** Player Journey Visualization Tool + hosted URL + 3 docs, in ONE GitHub repo
-**Deadline:** 5 days from receipt · **Effort budget:** 10–15 focused hours
-**Phase:** Analysis + architecture COMPLETE. Technical spikes PASSED. **Build not yet started.**
-**Next action:** Day 1 — pipeline, shared `transform.mjs`, 6 golden tests
+**Deadline:** 5 days from receipt · **Effort budget:** no fixed hour cap (D19); deadline is the constraint
+**Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public) · Cloudflare Pages linked
+**Phase:** **Phases 0–2 COMPLETE.** Pipeline + browser runtime verified, 45 tests green, design foundation locked.
+**Next action:** Phase 3 — map canvas (deck.gl, all 3 maps registering)
+
+Docs: `CONTEXT.md` (facts/decisions) · `TASKS.md` (checklist) · `BUILD_LOG.md` (activity log w/ evidence)
 
 ### Required deliverables (from the PDF)
 
@@ -295,6 +298,10 @@ Python pickle of the full dataset: `…\scratchpad\all.pkl`
 | D17 | **"All days combined" is the DEFAULT view** | Default to a single day | Designers should see everything on open; narrowing to one day is the deliberate action. |
 | D18 | **PUBLIC GitHub repo + Cloudflare Pages** *(revised 2026-09-10)* | Private repo | Originally private, but reviewer GitHub usernames are unobtainable (Q4) and a private link 404s for them — which looks like a broken submission. **A working link beats a careful one.** Materially, privacy bought little anyway: the deployed site necessarily serves `bundle.bin` to the browser, so the telemetry is downloadable by anyone with the URL regardless of repo visibility. README must note the data is LILA-supplied and UUID-anonymised, and offer to strip it on request. Can be flipped private later at no cost. |
 | D19 | **No fixed hour budget; the 5-day deadline is the constraint** | Cap at 10–15h | User instruction (2026-09-10). Extra time goes to **polish, correctness, and docs — NOT feature sprawl.** "Quality over quantity" is their stated evaluation principle, not a time-saving compromise. |
+| D20 | **IBM Plex Sans + IBM Plex Mono**, self-hosted via `@fontsource` | Inter; Geist; a display face (Clash/Cabinet/Outfit) | Inter is the default of defaults and reads as unconsidered. Display faces earn their keep in a hero; here every string is an 11–13px label, count or timestamp, where character is a liability. IBM drew Plex for technical/data-dense interfaces: humanist so it reads warm not clinical at small sizes, unambiguous numerals, and Plex Mono is a true metric companion. **All numbers are set in tabular figures** — proportional numerals make two values in a stats panel impossible to compare by eye. Self-hosted to avoid a Google Fonts round-trip and FOUT. |
+| D21 | **Two separate colour systems: chrome vs data** | One accent colour (the usual rule) | The "max one accent" rule is written for marketing pages. A data instrument must separate six categories at a glance, so hues here are *semantic encodings*, not brand colours. Chrome = cool neutrals + one accent (`#3a8fd9`) for selection/focus only. Data = **Okabe-Ito**, engineered to stay distinguishable under protanopia, deuteranopia and tritanopia. Colour is never the only channel — every marker also differs by shape. Purple (`#b06cff`) dropped for storm: too close to the AI-purple tell, and yellow carries "environmental hazard" better. |
+| D22 | **Low motion budget; ceiling 220ms** | Standard 300ms UI ceiling | A designer toggles layers and scrubs the timeline dozens of times a minute. Animating high-frequency actions fights the user. Data being read never moves for style. Named easing curves so timing stays coherent; `prefers-reduced-motion` honoured globally. |
+| D23 | **Full-viewport layout, high density** | `max-w-7xl` centred container (the landing-page convention) | Constraining a map tool to 1440px wastes a designer's monitor. Target VISUAL_DENSITY is cockpit-level (~8), not the airy 4 that suits marketing pages. |
 
 ### Guiding principles
 - **Describe precisely. Never prescribe falsely.** No invented severity scores or fake AI recommendations —
@@ -478,6 +485,20 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-10 — PHASE 2 COMPLETE (data runtime + design foundation)
+- `src/data/{types,loader,store,query,ingest}.ts` built. **45 tests pass** (20 pipeline + 25
+  runtime). Typecheck clean. Browser render verified via Playwright: **zero console errors**,
+  bundle decodes in **50 ms**.
+- Store indices: 1,242 journeys · 94 bots / 245 humans · **53 multi-participant matches**
+  (of 796) surfaced so the match picker never strands a designer on a single lonely dot.
+- **Traffic vs dwell proven distinct by test** (their peak cells differ on identical rows).
+- **Diff view normalises to share, enforced by test** — halving an identical distribution must
+  read as ~zero change. Without it the real 98→47 daily-volume decline would fake a
+  "traffic collapsed everywhere" result on every comparison.
+- Design foundation locked: **D20–D23** (IBM Plex Sans/Mono w/ tabular figures · separate
+  chrome vs Okabe-Ito data colour systems · 220ms motion ceiling · full-viewport density).
+- **Next: Phase 3 — map canvas (deck.gl OrthographicView, all 3 maps registering).**
 
 ### 2026-09-10 — PHASE 1 COMPLETE (data pipeline)
 - Built `transform.mjs` (shared by build + future browser ingest), `mapConfig.json` (data, not
