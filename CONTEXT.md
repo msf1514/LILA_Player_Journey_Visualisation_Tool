@@ -234,6 +234,7 @@ damage, or win/loss. **This telemetry cannot tell you whether anyone succeeded.*
 | 4 | "743 solo matches = low concurrency" | **Partial export.** 689 of them contain `BotKill` | Assumed export completeness |
 | 5 | "Negative space is the headline feature" | **Demoted.** Only Lockdown (65%) qualifies | Followed from correction #3 |
 | 6 | "Use `hysnappy` for Snappy decompression" | **Breaks it.** hyparquet's built-in works | Assumed the companion lib was needed |
+| 7 | "Map coverage is 87 / 84 / 65% of playable land" — quoted as a bare figure | **Resolution-dependent.** At 64×64 with the shipped 256² mask: **83 / 65 / 55%**. At 32×32: 87 / 84 / 65%. Finer grids always read lower. **Ranking is stable — Lockdown is consistently worst — and that is the real insight.** INSIGHTS.md must state the grid resolution; the dead-space layer must use one fixed resolution. | Treated a grid-dependent statistic as an absolute |
 
 ---
 
@@ -477,6 +478,18 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-10 — PHASE 1 COMPLETE (data pipeline)
+- Built `transform.mjs` (shared by build + future browser ingest), `mapConfig.json` (data, not
+  code), `build.mjs`, `minimaps.mjs`, and the 6 golden tests. **20 tests pass in 1.82s.**
+- Pipeline verified: **89,016 rows** · 1,242/1,243 unique files · duplicate caught (SHA-256
+  identical, 88 rows) · 339 users · 796 matches · **0 out-of-bounds** · ambiguous actors exactly
+  `1379, 1402, 1429` · combat instants 3,098.
+- Payload: `bundle.bin` 2.14 MB → **1.09 MB gz**; `meta.json` → 41 KB gz; minimaps 24 MB → **544 KB**.
+- `npm run build` runs clean end-to-end from scratch (pipeline 1.2s + Vite 762ms).
+- **Correction #7 added:** map-coverage % is grid-resolution dependent (83/65/55 at 64×64 vs
+  87/84/65 at 32×32). Ranking is stable; absolute figures are not. See §3.
+- **Next: Phase 2 — browser data runtime (loader, store, query).**
 
 ### 2026-09-10 — PHASE 0 COMPLETE (local)
 - **Q4 resolved: repo is PUBLIC** (revised D18). Reviewer usernames unobtainable; a private link 404s

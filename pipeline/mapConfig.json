@@ -1,0 +1,50 @@
+{
+  "$comment": [
+    "World-to-minimap coordinate configuration. This is DATA, not code (decision D9):",
+    "adding a fourth map must never require a redeploy, so the app reads this at runtime",
+    "and exposes an editor for it.",
+    "",
+    "scale / originX / originZ are taken from the dataset README and independently verified:",
+    "0.00% of 89,104 rows fall outside UV [0,1] on any map, hotspots land inside buildings,",
+    "99.3%+ of visited cells fall within a playable-land mask derived from the minimap art,",
+    "and the resulting movement speeds are physically plausible (median 2.52 m/s, max 12.65),",
+    "which independently confirms world units are metres.",
+    "",
+    "'source' dimensions are the ACTUAL image sizes. The dataset README claims all minimaps",
+    "are 1024x1024; they are not, and GrandRift is not even square. Nothing may assume them.",
+    "",
+    "'version' supports map-geometry versioning (decision D15). The supplied 5 days show no",
+    "geometry change (extents are stable across all days on all maps, and the telemetry has no",
+    "map-version field), but level designers ship map changes constantly — so behaviour data",
+    "can be tagged to a version and compared across one when it exists."
+  ],
+  "maps": {
+    "AmbroseValley": {
+      "label": "Ambrose Valley",
+      "note": "Primary / most played map — 566 matches (71% of all matches)",
+      "scale": 900,
+      "originX": -370,
+      "originZ": -473,
+      "version": "v1",
+      "source": { "file": "AmbroseValley_Minimap.png", "width": 4320, "height": 4320 }
+    },
+    "GrandRift": {
+      "label": "Grand Rift",
+      "note": "Secondary map — only 59 matches (7.4%). Under-tested; 2+ humans online simultaneously just 2% of the time.",
+      "scale": 581,
+      "originX": -290,
+      "originZ": -290,
+      "version": "v1",
+      "source": { "file": "GrandRift_Minimap.png", "width": 2160, "height": 2158 }
+    },
+    "Lockdown": {
+      "label": "Lockdown",
+      "note": "Smaller / close-quarters map — 171 matches (21.5%). Lowest playable-land coverage at 65%.",
+      "scale": 1000,
+      "originX": -500,
+      "originZ": -500,
+      "version": "v1",
+      "source": { "file": "Lockdown_Minimap.jpg", "width": 9000, "height": 9000 }
+    }
+  }
+}

@@ -27,27 +27,27 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 1.1 | `pipeline/transform.mjs` — **the only place the traps live** | M | Shared by build **and** runtime drop-zone ingest. One implementation or they drift silently. Exports: `normalizeTs`, `isBot`, `worldToUV`, `normalizeRow`. | `TODO` |
-| 1.1a | → Trap A: timestamps | S | `ts` is epoch **seconds** in a `timestamp[ms]` column. Correct value = `new Date(d.getTime() * 1000)`. Naive read gives 1970. True resolution is **1 second**. | `TODO` |
-| 1.1b | → Trap B: bytes encoding | S | `event` is a binary column. hyparquet **auto-decodes to string** — free in JS. (Python would need `.decode('utf-8')`.) | `TODO` |
-| 1.1c | → Trap C: bot detection | S | UUID `user_id` = human, numeric = bot. README's event-prefix rule is **wrong**. Flag the 3 contaminated accounts: `1429` (emits both `Position` and `BotPosition`), `1379`, `1402`. | `TODO` |
-| 1.1d | → Trap D: coordinates | S | `u=(x-originX)/scale`, `v=(z-originZ)/scale`, `px=u*W`, `py=(1-v)*H`. Use **x and z only** — `y` is elevation. | `TODO` |
-| 1.2 | `pipeline/mapConfig.json` | S | Ambrose 900/−370/−473 · GrandRift 581/−290/−290 · Lockdown 1000/−500/−500. **Data, not code** (D9) — a 4th map must not need a redeploy. Include a `version` field per map (D15). | `TODO` |
-| 1.3 | `pipeline/build.mjs` — parquet → bundle | M | Walk 5 day-folders. **Dedupe by FILENAME** (one file duplicated across Feb 10/11, byte-identical, −88 rows → 89,016). **NEVER row-dedupe** — 2,364 identical `Loot` rows are legitimate (1-second ts resolution) and dropping them destroys ~18% of loot events. | `TODO` |
-| 1.4 | Columnar binary encoding | M | Dictionary-encode users/matches/maps/events; typed arrays for the rest. Verified output: **1.96 MB → 1.04 MB gzipped** + 49 KB dictionaries. | `TODO` |
-| 1.5 | `pipeline/minimaps.mjs` — image processing | S | Sources are **NOT 1024×1024** (README is wrong): Ambrose 4320², GrandRift **2160×2158 (not square)**, Lockdown 9000² JPG. Downscale to WebP, ~2048px, 24 MB → ~600 KB. Also emit a **playable-land mask** (luminance > 28) for the dead-space layer. | `TODO` |
-| 1.6 | Precompute match metadata | S | Per match: map, date, duration, participant count, human count, bot count, has-combat, has-storm. Powers the match picker and lets us surface the **53 multi-participant matches**. | `TODO` |
+| 1.1 | `pipeline/transform.mjs` — **the only place the traps live** | M | Shared by build **and** runtime drop-zone ingest. One implementation or they drift silently. Exports: `normalizeTs`, `isBot`, `worldToUV`, `normalizeRow`. | `DONE` |
+| 1.1a | → Trap A: timestamps | S | `ts` is epoch **seconds** in a `timestamp[ms]` column. Correct value = `new Date(d.getTime() * 1000)`. Naive read gives 1970. True resolution is **1 second**. | `DONE` |
+| 1.1b | → Trap B: bytes encoding | S | `event` is a binary column. hyparquet **auto-decodes to string** — free in JS. (Python would need `.decode('utf-8')`.) | `DONE` |
+| 1.1c | → Trap C: bot detection | S | UUID `user_id` = human, numeric = bot. README's event-prefix rule is **wrong**. Flag the 3 contaminated accounts: `1429` (emits both `Position` and `BotPosition`), `1379`, `1402`. | `DONE` |
+| 1.1d | → Trap D: coordinates | S | `u=(x-originX)/scale`, `v=(z-originZ)/scale`, `px=u*W`, `py=(1-v)*H`. Use **x and z only** — `y` is elevation. | `DONE` |
+| 1.2 | `pipeline/mapConfig.json` | S | Ambrose 900/−370/−473 · GrandRift 581/−290/−290 · Lockdown 1000/−500/−500. **Data, not code** (D9) — a 4th map must not need a redeploy. Include a `version` field per map (D15). | `DONE` |
+| 1.3 | `pipeline/build.mjs` — parquet → bundle | M | Walk 5 day-folders. **Dedupe by FILENAME** (one file duplicated across Feb 10/11, byte-identical, −88 rows → 89,016). **NEVER row-dedupe** — 2,364 identical `Loot` rows are legitimate (1-second ts resolution) and dropping them destroys ~18% of loot events. | `DONE` |
+| 1.4 | Columnar binary encoding | M | Dictionary-encode users/matches/maps/events; typed arrays for the rest. Verified output: **1.96 MB → 1.04 MB gzipped** + 49 KB dictionaries. | `DONE` |
+| 1.5 | `pipeline/minimaps.mjs` — image processing | S | Sources are **NOT 1024×1024** (README is wrong): Ambrose 4320², GrandRift **2160×2158 (not square)**, Lockdown 9000² JPG. Downscale to WebP, ~2048px, 24 MB → ~600 KB. Also emit a **playable-land mask** (luminance > 28) for the dead-space layer. | `DONE` |
+| 1.6 | Precompute match metadata | S | Per match: map, date, duration, participant count, human count, bot count, has-combat, has-storm. Powers the match picker and lets us surface the **53 multi-participant matches**. | `DONE` |
 
 ### 1.7 — The 6 golden tests (`pipeline/transform.test.mjs`) — carries the "attention to detail" score
 
 | # | Test | Asserts | Status |
 |---|---|---|---|
-| T1 | Timestamp | `ts × 1000` lands in **Feb 2026**, not 1970 | `TODO` |
-| T2 | Coordinates | README's own worked example: Ambrose `x=−301.45, z=−355.55` → **pixel (78, 890)** | `TODO` |
-| T3 | Bounds | 0 of 89,016 rows fall outside UV [0,1] on all 3 maps | `TODO` |
-| T4 | Bot detection | UUID→human, numeric→bot; the 3 contaminated accounts flagged | `TODO` |
-| T5 | Dedupe | Removes exactly **88** rows; loot rows preserved (no row-dedupe) | `TODO` |
-| T6 | Combat counting | Counted by distinct `(file, ts)` instant, **not** row (42 instants carry 2 `BotKill` rows, 6 carry 3) | `TODO` |
+| T1 | Timestamp | `ts × 1000` lands in **Feb 2026**, not 1970 | `DONE` |
+| T2 | Coordinates | README's own worked example: Ambrose `x=−301.45, z=−355.55` → **pixel (78, 890)** | `DONE` |
+| T3 | Bounds | 0 of 89,016 rows fall outside UV [0,1] on all 3 maps | `DONE` |
+| T4 | Bot detection | UUID→human, numeric→bot; the 3 contaminated accounts flagged | `DONE` |
+| T5 | Dedupe | Removes exactly **88** rows; loot rows preserved (no row-dedupe) | `DONE` |
+| T6 | Combat counting | Counted by distinct `(file, ts)` instant, **not** row (42 instants carry 2 `BotKill` rows, 6 carry 3) | `DONE` |
 
 **Pipeline acceptance:** 89,016 rows · 339 users · 796 matches · 0.00% OOB · bundle < 1.2 MB gz · all 6 tests green.
 
