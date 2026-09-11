@@ -16,10 +16,18 @@ export interface FilterChipsProps {
   store: Store
   filter: Filter
   onChange: (next: Filter) => void
+  /** Describes the active time window, or null when the whole match is shown. */
+  timeLabel?: string | null
+  onClearTime?: () => void
 }
 
-export default function FilterChips({ store, filter, onChange }: FilterChipsProps) {
-  const chips: { key: string; label: string; clear: Partial<Filter> }[] = []
+export default function FilterChips({
+  store, filter, onChange, timeLabel, onClearTime,
+}: FilterChipsProps) {
+  const chips: { key: string; label: string; clear?: Partial<Filter>; run?: () => void }[] = []
+
+  // Time leads: a narrowed window changes what every other number means.
+  if (timeLabel) chips.push({ key: 'time', label: timeLabel, run: onClearTime })
 
   if (filter.dateFrom) {
     const label =
@@ -61,7 +69,7 @@ export default function FilterChips({ store, filter, onChange }: FilterChipsProp
           key={c.key}
           type="button"
           className="chip"
-          onClick={() => onChange({ ...filter, ...c.clear })}
+          onClick={() => (c.run ? c.run() : onChange({ ...filter, ...c.clear }))}
           aria-label={`Clear filter: ${c.label}`}
           title={`Clear filter: ${c.label}`}
         >
@@ -73,7 +81,7 @@ export default function FilterChips({ store, filter, onChange }: FilterChipsProp
         <button
           type="button"
           className="chip chip-reset"
-          onClick={() => onChange({ map: filter.map })}
+          onClick={() => { onClearTime?.(); onChange({ map: filter.map }) }}
         >
           Clear all
         </button>

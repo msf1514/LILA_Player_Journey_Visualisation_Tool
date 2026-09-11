@@ -110,11 +110,11 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 6.1 | **Match-elapsed normalisation (D5)** | M | Timeline runs 0 → ~15 min of match time, **not wall-clock**. Matches are independent sessions; only relative time aligns. Lets one scrubber show "where is everyone at minute 3" **aggregated across every match in the filter**. This is the centrepiece. | `TODO` |
-| 6.2 | Scrubber + play/pause/speed | M | 1× / 2× / 4× / 8×. Time readout as `mm:ss`. Time window filters **every** layer simultaneously. | `TODO` |
-| 6.3 | Cumulative vs sliding-window mode | S | Cumulative = accumulation from match start to T. Window = what's happening *now*. Both useful; toggle between them. | `TODO` |
-| 6.4 | Single-match replay | M | When one match is selected, the same control becomes a literal replay of that match. | `TODO` |
-| 6.5 | Storm-window marker | S | Mark ~655s on the timeline — the storm's hard activation floor. **82% of matches end before it.** Makes the insight visible in the UI itself. | `TODO` |
+| 6.1 | **Match-elapsed normalisation (D5)** | M | Timeline runs 0 → ~15 min of match time, **not wall-clock**. Matches are independent sessions; only relative time aligns. Lets one scrubber show "where is everyone at minute 3" **aggregated across every match in the filter**. This is the centrepiece. | `DONE` |
+| 6.2 | Scrubber + play/pause/speed | M | 1× / 2× / 4× / 8×. Time readout as `mm:ss`. Time window filters **every** layer simultaneously. | `DONE` |
+| 6.3 | Cumulative vs sliding-window mode | S | Cumulative = accumulation from match start to T. Window = what's happening *now*. Both useful; toggle between them. | `DONE` |
+| 6.4 | Single-match replay | M | When one match is selected, the same control becomes a literal replay of that match. | `DONE` |
+| 6.5 | Storm-window marker | S | Mark ~655s on the timeline — the storm's hard activation floor. **82% of matches end before it.** Makes the insight visible in the UI itself. | `DONE` |
 
 ---
 

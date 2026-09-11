@@ -56,8 +56,8 @@ produces a finding, a decision, a correction, code, or progress.
 **Deadline:** 5 days from receipt · **Effort budget:** no fixed hour cap (D19); deadline is the constraint
 **Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public)
 **Live:** https://lila-pjvt.msf1514.workers.dev — Cloudflare Worker + Static Assets, auto-deploys on push to `main`
-**Phase:** **Phases 0–5 COMPLETE.** Pipeline, runtime, canvas, eight layers and the filter rail verified; 63 tests green.
-**Next action:** Phase 6 — timeline on match-elapsed time, plus playback
+**Phase:** **Phases 0–6 COMPLETE.** Pipeline, runtime, canvas, layers, filters and the timeline verified; 63 tests green.
+**Next action:** Phase 7 — difference view (share-normalised) and side-by-side compare
 
 Docs: `CONTEXT.md` (facts/decisions) · `TASKS.md` (checklist) · `BUILD_LOG.md` (activity log w/ evidence)
 
@@ -239,6 +239,8 @@ damage, or win/loss. **This telemetry cannot tell you whether anyone succeeded.*
 | 5 | "Negative space is the headline feature" | **Demoted.** Only Lockdown (65%) qualifies | Followed from correction #3 |
 | 6 | "Use `hysnappy` for Snappy decompression" | **Breaks it.** hyparquet's built-in works | Assumed the companion lib was needed |
 | 8 | "60 FPS locked" from the deck.gl perf spike | **Worthless measurement.** It ran under `--use-gl=swiftshader`, where deck.gl fires `onAfterRender` and logs no error but **draws nothing** — so it timed an empty loop. Real pacing while panning (1280x900, real GL): median **16.7 ms**, p90 31.7 ms with no data overlay, 94.1 ms with 9,739 raw points. Conclusion unchanged (median ~60 fps) but the original evidence was not evidence. **Never pass GL flags to Playwright when verifying deck.gl output.** | Trusted frame timings without looking at the rendered frame |
+| 11 | A playback clock can safely sync its position from React state each render | **No.** Doing so made playback run at exactly half speed: each rAF frame advanced the ref, called setState, then a render-phase effect wrote the older uncommitted value back over it. A clock must own its position; callers push in only when they seek. | Treated a real-time integrator like derived state |
+| 10 | Filtering whole journeys is correct for every filter | **Not for time.** Map, date and actor choose WHICH journeys to draw. Time must clip points: filtering by journey drew a complete twelve-minute route while the clock read 01:00, so the map contradicted the timeline. | Generalised a rule that was only right for non-temporal filters |
 | 9 | Memoising deck.gl `Layer` instances is a safe optimisation | **False, and silently destructive.** Layers are single-use descriptors; reusing an instance breaks the lifecycle and the layer stops drawing with **no error**. It also corrupted a perf measurement, since not-drawing looks fast. Cache the expensive *input* (an image, a data array); construct layers fresh every render. | Assumed React memoisation rules applied to deck.gl objects |
 | 7 | "Map coverage is 87 / 84 / 65% of playable land" — quoted as a bare figure | **Resolution-dependent.** At 64×64 with the shipped 256² mask: **83 / 65 / 55%**. At 32×32: 87 / 84 / 65%. Finer grids always read lower. **Ranking is stable — Lockdown is consistently worst — and that is the real insight.** INSIGHTS.md must state the grid resolution; the dead-space layer must use one fixed resolution. | Treated a grid-dependent statistic as an absolute |
 
@@ -488,6 +490,24 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-11 - PHASE 6 COMPLETE (timeline and playback)
+- Scrubber on MATCH-ELAPSED time with playback, speed control, cumulative vs last-30s mode,
+  survivor density band, storm marker at 10:55, and a live "N of M matches still running" count.
+- **The survivorship disclosure is the point of this phase.** Scrubbing past the median match
+  duration empties the map, but because matches ended, not because players went quiet. Verified
+  on Ambrose: 563 of 566 live at 01:00, 346 at 05:00, 95 at 10:56, 64 at 11:40. Without the
+  count a designer would read "late-game traffic collapses" and be wrong.
+- **Correction #10: buildPaths ignored the time window.** It filtered whole journeys (right for
+  map/date/actor) but for time that drew a full twelve-minute route under a clock reading 01:00.
+  Time must clip per point. Fixed; journeys now move 824 -> 902 -> 978 across the scrub instead
+  of a flat 986.
+- **Correction #11: playback ran at exactly half speed** because an effect synced the rAF clock
+  ref from React state every render, overwriting half of each step with a stale value. A clock
+  must own its own position; callers push in only on seek.
+- Verified: 1x advances 4s in 4s, 8x advances 25s in 3s, Home/End/arrows/Space all work,
+  scrub holds 28 fps median under an aggressive synthetic drag, zero console errors.
+- **Next: Phase 7 - difference view (normalised to share, never raw counts) and side-by-side.**
 
 ### 2026-09-11 - PHASE 5 COMPLETE (filter rail)
 - Filter rail (map, day, match, actor, events) + active-filter chips + empty state.

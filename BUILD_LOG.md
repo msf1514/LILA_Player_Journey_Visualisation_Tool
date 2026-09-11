@@ -39,6 +39,67 @@
 
 ---
 
+## 2026-09-11 - Phase 6 - Timeline and playback
+**Tasks:** 6.1 - 6.5   **Commit:** _(this commit)_   **Status:** DONE
+
+### Did
+- `src/ui/Timeline.tsx` - scrubber on match-elapsed time with play/pause, 1x/2x/4x/8x,
+  mm:ss clock, cumulative vs last-30s mode, a survivor density band along the track, a
+  storm marker at 10:55 and a live "N of M matches still running" readout.
+- `src/ui/usePlayback.ts` - rAF clock integrating real elapsed time, plus `useThrottled`
+  so the expensive recomputation follows the scrubber instead of blocking it.
+- `src/App.tsx` - the time window writes into the existing Filter, so every layer, count
+  and stat responds through the one path built in Phase 5.
+
+### Verified
+| Check | Result |
+|---|---|
+| `npm test` | 63 passed |
+| `npx tsc -b` | exit 0 |
+| Console errors | none |
+| Playback rate | 1x advanced 00:00 to 00:04 in 4s; 8x then advanced 25s in 3s |
+| Keyboard | Home 00:00, End 14:50, ArrowLeft steps, Space toggles play |
+| Scrub responsiveness | median 35.4 ms (28 fps), p90 110 ms, under an aggressive synthetic drag |
+
+Survivor counts fall exactly as the durations predict (Ambrose Valley, 566 matches):
+
+| T | live matches | rows | journeys | coverage |
+|---|---|---|---|---|
+| full range | all 566 | 60,925 | 986 | 83% |
+| 01:00 | 563 | 9,287 | 824 | 43% |
+| 05:00 | 346 | 41,977 | 902 | 80% |
+| 10:56 | 95 | 59,353 | 978 | 82% |
+| 11:40 | 64 | 60,105 | 981 | 82% |
+
+Cumulative vs last-30s at the same 05:00: 41,977 rows against 2,829, coverage 80% against
+38%. Visibly different maps - the whole map lit versus a handful of live clusters.
+
+### Notes
+- **Three bugs found by verification, none of which the compiler could catch.**
+  1. **Paths ignored the time window.** `buildPaths` filtered whole journeys, correct for map
+     or date, but for time it drew a player's complete twelve-minute route while the clock
+     read 01:00. The map was flatly contradicting the timeline. Now clips per point.
+     This meant editing `src/map/layers.ts`, which the phase brief had scoped out; shipping a
+     route nobody had walked yet was the worse option. Minimal additive change.
+  2. **Playback ran at exactly half speed.** An effect synced the clock ref from React state
+     on every render, so each frame advanced the ref, called setState, then had the older
+     uncommitted value written back over it. The clock now owns its value and callers push
+     into it only when seeking.
+  3. **The survivor note fired at the default view**, reading "the rest have ended, so the map
+     thins" when nothing was narrowed at all. Now reads "Showing all 566 matches, full duration".
+- Two self-inflicted crashes during the fix, both worth remembering: returning a fresh object
+  literal from `usePlayback` made it unusable as an effect dependency and looped forever, and
+  placing the seek effect above the `const clock = ...` declaration blanked the entire app with
+  only "Cannot access 'ne' before initialization" in the console.
+- 28 fps during a synthetic drag is the honest number, not 60. The scrubber itself stays
+  immediate; the throttle is what the map follows.
+
+### Files
+Created: `src/ui/Timeline.tsx` - `src/ui/usePlayback.ts`
+Modified: `src/App.tsx` - `src/ui/FilterChips.tsx` - `src/ui/controls.css` - `src/map/layers.ts`
+
+---
+
 ## 2026-09-11 - Phase 5 - Filter rail
 **Tasks:** 5.1 - 5.6   **Commit:** _(this commit)_   **Status:** DONE
 

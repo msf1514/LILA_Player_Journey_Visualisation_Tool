@@ -14,6 +14,9 @@ import LayerPanel from './ui/LayerPanel'
 import type { LayerId } from './ui/LayerPanel'
 import FilterRail from './ui/FilterRail'
 import FilterChips from './ui/FilterChips'
+import Timeline, { STORM_FLOOR_S, WINDOW_S, mmss } from './ui/Timeline'
+import type { TimeMode } from './ui/Timeline'
+import { usePlayback, useThrottled } from './ui/usePlayback'
 
 type State =
   | { status: 'loading' }
@@ -68,8 +71,82 @@ function Workspace({ store }: { store: Store }) {
   const [filter, setFilter] = useState<Filter>(() => ({ map: maps[0] }))
   const [active, setActive] = useState<Set<LayerId>>(() => new Set<LayerId>(['traffic', 'loot']))
 
+  // Timeline state. `t` is the raw scrubber position: immediate, so the thumb and the clock
+  // never lag the hand. The expensive work follows a throttled copy of it.
+  const [mode, setMode] = useState<TimeMode>('cumulative')
+  const [playing, setPlaying] = useState(false)
+  const [speed, setSpeed] = useState(1)
+  const [t, setT] = useState(() => store.meta.stats.maxElapsedSeconds)
+
   const mapId = filter.map ?? maps[0]
   const config = store.meta.mapConfig[mapId]
+
+  /**
+   * Axis length. Clamps to the chosen match's own duration when exactly one is selected, so
+   * a 9-minute match does not sit on a 15-minute axis with five dead minutes to its right.
+   */
+  const selectedMatchIdx = useMemo(() => {
+    const id = filter.matchIds?.[0]
+    return id ? store.meta.dict.matches.indexOf(id) : -1
+  }, [store, filter.matchIds])
+
+  const maxT = selectedMatchIdx >= 0
+    ? Math.max(1, store.matchMeta(selectedMatchIdx).duration)
+    : store.meta.stats.maxElapsedSeconds
+
+  /**
+   * Sorted durations of the matches this filter covers, for the survivor curve.
+   *
+   * Deliberately ignores the actor and event filters: a match either ran to a given second
+   * or it did not, regardless of which events you are looking at.
+   */
+  const durations = useMemo(() => {
+    const out: number[] = []
+    const from = filter.dateFrom
+    const to = filter.dateTo ?? filter.dateFrom
+    const ids = filter.matchIds ? new Set(filter.matchIds) : null
+    store.meta.matchMeta.forEach((m, i) => {
+      if (m.map !== mapId) return
+      if (from && (m.date < from || m.date > (to ?? from))) return
+      if (ids && !ids.has(store.matchId(i))) return
+      out.push(m.duration)
+    })
+    return out.sort((a, b) => a - b)
+  }, [store, mapId, filter.dateFrom, filter.dateTo, filter.matchIds])
+
+  /**
+   * The expensive work follows a throttled copy of `t`. Rebuilding a heat raster on every
+   * animation frame would make the scrubber itself stutter, which is the one thing that has
+   * to stay immediate. 90ms keeps the map feeling attached to the hand while cutting the
+   * recomputation rate by about an order of magnitude during a fast drag.
+   */
+  const appliedT = useThrottled(t, 90)
+
+  const atEnd = appliedT >= maxT - 0.5
+  /** Cumulative at full range is not a filter at all, so the default view stays unfiltered. */
+  const timeActive = !(mode === 'cumulative' && atEnd)
+
+  const elapsedFrom = timeActive
+    ? (mode === 'cumulative' ? 0 : Math.max(0, Math.round(appliedT - WINDOW_S)))
+    : undefined
+  const elapsedTo = timeActive ? Math.round(appliedT) : undefined
+
+  /** One object. The timeline is just another filter, so every layer responds through it. */
+  const effective = useMemo<Filter>(
+    () => ({ ...filter, elapsedFrom, elapsedTo }),
+    [filter, elapsedFrom, elapsedTo],
+  )
+
+  const clock = usePlayback(playing, speed, maxT, setT, () => setPlaying(false))
+
+  /** Seeking moves both the UI value and the clock, so playback resumes from where you left it. */
+  const seek = (v: number) => { clock.seek(v); setT(v) }
+
+  // Park the scrubber at the end of a newly clamped axis rather than stranding it beyond one.
+  // Declared after the clock: an earlier version sat above it and died on the temporal dead
+  // zone, which blanked the whole app with only "Cannot access 'ne' before initialization".
+  useEffect(() => { clock.seek(maxT); setT(maxT); setPlaying(false) }, [maxT, clock])
+  const clearTime = () => { setMode('cumulative'); seek(maxT); setPlaying(false) }
 
   const toggle = (id: LayerId) =>
     setActive((prev) => {
@@ -79,7 +156,7 @@ function Workspace({ store }: { store: Store }) {
     })
 
   /** One filter pass. Every layer, count and stat below derives from this single result. */
-  const rows = useMemo(() => filterRows(store, filter), [store, filter])
+  const rows = useMemo(() => filterRows(store, effective), [store, effective])
 
   /**
    * Event counts under every filter EXCEPT the event filter itself.
@@ -90,16 +167,16 @@ function Workspace({ store }: { store: Store }) {
    * player-versus-player kills in the entire five days.
    */
   const eventCounts = useMemo(() => {
-    const base = filterRows(store, { ...filter, events: undefined })
+    const base = filterRows(store, { ...effective, events: undefined })
     const counts: Record<string, number> = {}
     for (const name of store.meta.dict.events) counts[name] = 0
     for (const r of base) counts[store.eventName(store.cols.evIdx[r])]++
     return counts
-  }, [store, filter])
+  }, [store, effective])
 
   const positionRows = useMemo(
-    () => filterRows(store, { ...filter, events: intersectEvents(filter.events, POSITION_EVENTS) }),
-    [store, filter],
+    () => filterRows(store, { ...effective, events: intersectEvents(filter.events, POSITION_EVENTS) }),
+    [store, effective, filter.events],
   )
 
   /**
@@ -140,16 +217,24 @@ function Workspace({ store }: { store: Store }) {
   const deaths = useMemo(() => collectEvents(store, rows, config, DEATH_EVENTS), [store, rows, config])
 
   /**
-   * Paths respect the filter by choosing which journeys to draw, not by trimming points from
-   * them. A journey is a whole route: filtering it part-way would draw a fragment and imply
-   * the player stopped where the filter did.
+   * Paths take the two filter kinds differently, and the distinction matters.
+   *
+   * Map, date and actor choose WHICH journeys to draw: a journey is a whole route, and
+   * part-filtering one would draw a fragment implying the player stopped where the filter did.
+   *
+   * Time is the exception. It clips points, because a route is walked over time: at minute
+   * one the map must show only the first minute of it. Drawing the full route under a clock
+   * reading 01:00 would have the map contradicting the timeline.
    */
   const mapIdx = maps.indexOf(mapId)
   const paths = useMemo(() => {
     const allowed = new Set<number>()
     for (const r of positionRows) allowed.add(store.cols.matchIdx[r] * 65536 + store.cols.userIdx[r])
-    return buildPaths(store, config, mapIdx, (u, m) => allowed.has(m * 65536 + u))
-  }, [store, config, mapIdx, positionRows])
+    const window = elapsedTo !== undefined
+      ? { from: elapsedFrom ?? 0, to: elapsedTo }
+      : undefined
+    return buildPaths(store, config, mapIdx, (u, m) => allowed.has(m * 65536 + u), window)
+  }, [store, config, mapIdx, positionRows, elapsedFrom, elapsedTo])
 
   const actors = useMemo(() => {
     const stride = Math.max(1, Math.ceil(positionRows.length / 14000))
@@ -205,7 +290,13 @@ function Workspace({ store }: { store: Store }) {
     <div className="app">
       <header className="app-header">
         <h1 className="app-title">LILA BLACK</h1>
-        <FilterChips store={store} filter={filter} onChange={setFilter} />
+        <FilterChips
+          store={store}
+          filter={filter}
+          onChange={setFilter}
+          timeLabel={timeActive ? timeChipLabel(mode, appliedT) : null}
+          onClearTime={clearTime}
+        />
       </header>
 
       <FilterRail store={store} filter={filter} onChange={setFilter} eventCounts={eventCounts} />
@@ -213,8 +304,27 @@ function Workspace({ store }: { store: Store }) {
       <div className="app-canvas">
         <MapCanvas mapId={mapId} config={config} layers={layers} focus={focus} getTooltip={tooltip} />
         <LayerPanel active={active} onToggle={toggle} counts={counts} />
-        {rows.length === 0 && <EmptyState filter={filter} store={store} onChange={setFilter} />}
+        {rows.length === 0 && (
+          <EmptyState filter={effective} store={store} onChange={setFilter} onClearTime={clearTime} />
+        )}
       </div>
+
+      <Timeline
+        t={t}
+        max={maxT}
+        mode={mode}
+        playing={playing}
+        speed={speed}
+        durations={durations}
+        totalMatches={durations.length}
+        singleMatch={selectedMatchIdx >= 0}
+        timeActive={timeActive}
+        onSeek={(v) => { seek(v); setPlaying(false) }}
+        onMode={setMode}
+        onPlay={setPlaying}
+        onSpeed={setSpeed}
+        onReset={clearTime}
+      />
 
       <StatStrip
         mapLabel={config.label}
@@ -224,7 +334,7 @@ function Workspace({ store }: { store: Store }) {
         deaths={deaths.length}
         paths={paths.length}
         coverage={coverage}
-        filtered={isFiltered(filter)}
+        filtered={isFiltered(effective)}
       />
     </div>
   )
@@ -236,7 +346,8 @@ function intersectEvents(selected: string[] | undefined, needed: string[]): stri
   return needed.filter((e) => selected.includes(e))
 }
 
-const isFiltered = (f: Filter) => Boolean(f.dateFrom || f.matchIds?.length || f.actor || f.events)
+const isFiltered = (f: Filter) =>
+  Boolean(f.dateFrom || f.matchIds?.length || f.actor || f.events || f.elapsedTo !== undefined)
 
 /**
  * Empty state.
@@ -245,10 +356,16 @@ const isFiltered = (f: Filter) => Boolean(f.dateFrom || f.matchIds?.length || f.
  * Rift has only 59 matches across five days, so a map plus a day can legitimately yield
  * nothing. A blank map with no explanation reads as a broken tool.
  */
+/** Chip text for the active time window. */
+function timeChipLabel(mode: TimeMode, t: number): string {
+  return mode === 'cumulative' ? 'Up to ' + mmss(t) : mmss(t) + ' (last ' + WINDOW_S + 's)'
+}
+
 function EmptyState({
-  filter, store, onChange,
-}: { filter: Filter; store: Store; onChange: (f: Filter) => void }) {
-  const culprits: { label: string; clear: Partial<Filter> }[] = []
+  filter, store, onChange, onClearTime,
+}: { filter: Filter; store: Store; onChange: (f: Filter) => void; onClearTime: () => void }) {
+  const culprits: { label: string; clear?: Partial<Filter>; run?: () => void }[] = []
+  if (filter.elapsedTo !== undefined) culprits.push({ label: 'the time window', run: onClearTime })
   if (filter.dateFrom) culprits.push({ label: 'the selected day', clear: { dateFrom: undefined, dateTo: undefined } })
   if (filter.matchIds?.length) culprits.push({ label: 'the selected match', clear: { matchIds: undefined } })
   if (filter.actor) culprits.push({ label: 'the actor filter', clear: { actor: undefined } })
@@ -268,7 +385,7 @@ function EmptyState({
               type="button"
               className="map-control"
               style={{ padding: '0 var(--space-3)' }}
-              onClick={() => onChange({ ...filter, ...c.clear })}
+              onClick={() => (c.run ? c.run() : onChange({ ...filter, ...c.clear }))}
             >
               Clear {c.label}
             </button>
@@ -277,7 +394,7 @@ function EmptyState({
             type="button"
             className="map-control"
             style={{ padding: '0 var(--space-3)' }}
-            onClick={() => onChange({ map: filter.map })}
+            onClick={() => { onClearTime(); onChange({ map: filter.map }) }}
           >
             Clear all filters
           </button>
@@ -324,6 +441,7 @@ function StatStrip({
       <span>kills vs bots <b className="num">{kills.toLocaleString()}</b></span>
       <span>deaths <b className="num">{deaths.toLocaleString()}</b></span>
       <span>journeys <b className="num">{paths.toLocaleString()}</b></span>
+      <span style={{ color: 'var(--text-3)' }}>storm from <b className="num">{mmss(STORM_FLOOR_S)}</b></span>
       {coverage ? (
         <span>
           coverage <b className="num">{Math.round(coverage.coverage * 100)}%</b> of playable land,

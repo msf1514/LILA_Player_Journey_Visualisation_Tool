@@ -352,8 +352,18 @@ export function buildPaths(
   cfg: MapConfig,
   mapIdx: number,
   keep?: (userIdx: number, matchIdx: number) => boolean,
+  /**
+   * Match-elapsed window, in seconds. Points outside it are dropped.
+   *
+   * Clipping has to happen per point, not per journey. Filtering whole journeys is right for
+   * map, date or actor, but for time it would draw a player's complete twelve-minute route
+   * while the clock reads one minute. The map would be flatly contradicting the timeline,
+   * and a designer scrubbing to minute 1 would see routes nobody had walked yet.
+   */
+  elapsed?: { from: number; to: number },
 ): PathSegment[] {
   const { x, z, tSec, evIdx } = store.cols
+  const el = store.cols.elapsed
   const out: PathSegment[] = []
 
   for (const j of store.journeys) {
@@ -366,6 +376,7 @@ export function buildPaths(
     for (let i = j.start; i < j.end; i++) {
       const name = store.eventName(evIdx[i])
       if (name !== 'Position' && name !== 'BotPosition') continue
+      if (elapsed && (el[i] < elapsed.from || el[i] > elapsed.to)) continue
       const t = tSec[i]
       if (current.length && t - prevT > PATH_GAP_SECONDS) {
         if (current.length > 1) out.push({ path: current, bot: j.bot, userIdx: j.userIdx, matchIdx: j.matchIdx })

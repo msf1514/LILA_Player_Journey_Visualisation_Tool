@@ -224,10 +224,11 @@
 .app {
   display: grid;
   grid-template-columns: auto 1fr;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr auto auto;
   grid-template-areas:
     "header header"
     "rail   canvas"
+    "rail   timeline"
     "stats  stats";
   height: 100dvh;
 }
@@ -251,3 +252,126 @@
 .rail { grid-area: rail; }
 .app-canvas { grid-area: canvas; position: relative; min-width: 0; min-height: 0; }
 .stat-strip { grid-area: stats; }
+
+/* ── Timeline ────────────────────────────────────────────────────────────── */
+.timeline {
+  grid-area: timeline;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas: "controls track" "controls meta";
+  align-items: center;
+  gap: 2px var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-1);
+  border-top: 1px solid var(--line);
+}
+.tl-controls { grid-area: controls; display: flex; align-items: center; gap: var(--space-2); }
+.tl-play { width: 30px; font-size: 11px; }
+.tl-clock {
+  min-width: 52px;
+  font-size: var(--text-md);
+  color: var(--text-1);
+  letter-spacing: var(--tracking-tight);
+}
+.tl-speeds { display: flex; gap: 1px; }
+.tl-speed {
+  padding: 2px 6px;
+  background: transparent;
+  color: var(--text-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color var(--dur-instant) var(--ease-out),
+              background var(--dur-instant) var(--ease-out);
+}
+.tl-speed:hover { color: var(--text-1); background: var(--bg-2); }
+.tl-speed[aria-checked='true'] { color: var(--text-1); background: var(--accent-weak); border-color: var(--accent); }
+
+/* Track: survivor density behind, storm marker over it, native range on top. */
+.tl-track-wrap { grid-area: track; position: relative; height: 26px; }
+.tl-band {
+  position: absolute;
+  inset: 7px 0 7px 0;
+  display: flex;
+  gap: 0;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.tl-band span { flex: 1; background: var(--accent); }
+.tl-storm {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px dashed var(--ev-storm);
+  pointer-events: none;
+}
+.tl-storm-label {
+  position: absolute;
+  top: -2px;
+  left: 3px;
+  font-size: 9px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--ev-storm);
+  white-space: nowrap;
+}
+.tl-range {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+.tl-range::-webkit-slider-runnable-track { height: 26px; background: transparent; }
+.tl-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 3px;
+  height: 26px;
+  border-radius: 1px;
+  background: var(--text-1);
+  box-shadow: 0 0 0 1px var(--bg-0);
+  cursor: ew-resize;
+}
+.tl-range::-moz-range-track { height: 26px; background: transparent; }
+.tl-range::-moz-range-thumb {
+  width: 3px; height: 26px; border: none; border-radius: 1px;
+  background: var(--text-1); box-shadow: 0 0 0 1px var(--bg-0); cursor: ew-resize;
+}
+
+.tl-meta {
+  grid-area: meta;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}
+.tl-modes { display: flex; gap: 1px; }
+.tl-mode {
+  padding: 2px var(--space-2);
+  background: transparent;
+  color: var(--text-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color var(--dur-instant) var(--ease-out),
+              background var(--dur-instant) var(--ease-out);
+}
+.tl-mode:hover { color: var(--text-1); background: var(--bg-2); }
+.tl-mode[aria-checked='true'] { color: var(--text-1); background: var(--accent-weak); border-color: var(--accent); }
+.tl-live { color: var(--text-2); }
+.tl-live b { color: var(--text-1); font-weight: 500; }
+.tl-live-note { color: var(--text-3); }
+.tl-reset { margin-left: auto; height: 22px; padding: 0 var(--space-2); font-size: var(--text-xs); }
+
+/* Reduced motion: playback still works, the thumb just does not glide. */
+@media (prefers-reduced-motion: reduce) {
+  .tl-range { transition: none; }
+}
