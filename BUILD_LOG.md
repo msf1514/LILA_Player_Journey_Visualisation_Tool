@@ -39,6 +39,62 @@
 
 ---
 
+## 2026-09-11 - Phase 9 - URL state and copy link
+**Tasks:** 9.1 - 9.3   **Commit:** _(this commit)_   **Status:** DONE
+
+### Did
+- `src/state/url.ts` - pure encode/decode. Encodes only what differs from the default, so an
+  unfiltered view produces a bare URL. `decodeState` validates every value against the
+  CURRENT data and returns a `dropped` list rather than throwing.
+- `src/state/url.test.ts` - 17 tests, round-trip plus stale-link degradation.
+- `src/ui/useUrlState.ts` - history sync. Derives push-versus-replace by comparing encoded
+  params, so no component has to remember to flag itself as continuous.
+- `src/ui/CopyLink.tsx` - copy control with a manual fallback when the clipboard is refused.
+- `src/App.tsx` - all state seeded from the address bar on first render; popstate restores.
+
+### Verified
+| Check | Result |
+|---|---|
+| `npm test` | **86 passed** (69 + 17 new) |
+| `npx tsc -b` | exit 0 |
+| Default view URL | **empty query string** |
+| 4 discrete changes | history 2 -> 7, one entry each |
+| **Full timeline drag, 29 changes** | **0 history entries added** |
+| Back button | steps back through discrete changes in order |
+| Fresh browser from copied link | stat strip identical: `Lockdown rows 1,206 loot 0 kills vs bots 12 deaths 20 journeys 21 coverage 22%` |
+| Chips after restore | `Up to 13:20 / 11 Feb / Bots only / 6 of 8 event types` |
+| Playback after opening a link | paused |
+| Layer round trip | `?l=dwell,paths,traffic` restored Traffic, Dwell, Paths |
+| Stale link | `?m=Lockdown&a=human&x=not-a-real-match&e=Loot,Extracted` restored Lockdown and reported both drops |
+| Console errors | none |
+
+### Notes
+- **Match ids are written out in full, deliberately.** A dictionary index would cost two
+  characters instead of 45, but dictionary order comes from the build. Rebuild the bundle with
+  a day of fresh telemetry and index 214 is a different match: every link already pasted into
+  a document would point somewhere else, with no error, still looking valid. Stable
+  identifiers cost length; indices cost correctness.
+- **Push versus replace is derived, not declared.** `onlyTimeChanged` compares the encoded
+  parameters of the previous and next state. A component added later cannot forget to mark
+  itself continuous, because nothing asks it to.
+- **Playback is never encoded.** A shared view that starts playing takes control away from
+  whoever opened it. Position travels; motion does not.
+- Test-harness flaw worth recording: `.layer-row` is used by BOTH the layer panel and the
+  rail's event list, so the first pass clicked event checkboxes while believing it was
+  toggling layers. The URL was correct throughout; the test was reading the wrong control.
+  Re-verified with `aside[aria-label="Layers"] .layer-row`.
+- A patch hunk silently failed to match (the state block had been reordered in Phase 6) while
+  a dependent hunk applied, leaving a reference to an undeclared `initial` and blanking the
+  app. Fourth crash of this shape on this project. Verify every hunk applied, not just that
+  the script exited zero.
+
+### Files
+Created: `src/state/url.ts` - `src/state/url.test.ts` - `src/ui/useUrlState.ts` -
+`src/ui/CopyLink.tsx`
+Modified: `src/App.tsx` - `src/ui/controls.css`
+
+---
+
 ## 2026-09-11 - Phase 7 - Comparison
 **Tasks:** 7.1 - 7.4   **Commit:** _(this commit)_   **Status:** DONE
 

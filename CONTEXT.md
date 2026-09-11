@@ -56,8 +56,8 @@ produces a finding, a decision, a correction, code, or progress.
 **Deadline:** 5 days from receipt · **Effort budget:** no fixed hour cap (D19); deadline is the constraint
 **Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public)
 **Live:** https://lila-pjvt.msf1514.workers.dev — Cloudflare Worker + Static Assets, auto-deploys on push to `main`
-**Phase:** **Phases 0–7 COMPLETE.** Pipeline, runtime, canvas, layers, filters, timeline and comparison verified; 69 tests green.
-**Next action:** Phase 8 — hotspot ranking and drill-down
+**Phase:** **Phases 0–7 and 9 COMPLETE** (8 deferred). 86 tests green. Every functional item on LILA’s submission checklist is met; only the documents remain.
+**Next action:** Phase 13 — README, ARCHITECTURE, INSIGHTS, WALKTHROUGH
 
 Docs: `CONTEXT.md` (facts/decisions) · `TASKS.md` (checklist) · `BUILD_LOG.md` (activity log w/ evidence)
 
@@ -490,6 +490,22 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-11 - PHASE 9 COMPLETE (URL state and copy link)
+- Whole view state in the URL; copy-link control; browser back and forward work.
+  **86 tests pass**, tsc clean, zero console errors.
+- **Verified in a fresh browser context:** a copied link restored an identical stat strip
+  (`Lockdown rows 1,206 loot 0 kills vs bots 12 deaths 20 journeys 21 coverage 22%`), identical
+  chips, correct layers, and did NOT start playback.
+- **The history rule works:** 4 discrete changes added 4 entries; a full 29-step timeline drag
+  added **zero**. Push versus replace is derived by comparing encoded params, so a future
+  component cannot forget to mark itself continuous.
+- **Match ids are encoded in full, on purpose.** An index would be 2 characters instead of 45,
+  but dictionary order is build-dependent: after a rebuild every pasted link would silently
+  point at a different match. Stable ids cost length; indices cost correctness.
+- Stale links degrade and report what they dropped, rather than silently widening the view.
+- **Next: Phase 13 - the four documents. They are the only unmet items on LILA's own
+  submission checklist; every functional requirement is now satisfied.**
 
 ### 2026-09-11 - PHASE 7 COMPLETE (comparison)
 - Difference view (primary), side-by-side with linked panning (secondary), comparing by day,

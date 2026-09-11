@@ -146,9 +146,9 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 9.1 | URL state encode/decode (D8) | M | Map, dates, filters, layers, time window, selection, compare mode — all in the URL. | `TODO` |
-| 9.2 | "Copy link" button | S | Copies current view. **The single highest-leverage adoption feature** — tools without it get used by their author and nobody else. | `TODO` |
-| 9.3 | Browser back/forward | S | History integration so navigation feels native. | `TODO` |
+| 9.1 | URL state encode/decode (D8) | M | Map, dates, filters, layers, time window, selection, compare mode — all in the URL. | `DONE` |
+| 9.2 | "Copy link" button | S | Copies current view. **The single highest-leverage adoption feature** — tools without it get used by their author and nobody else. | `DONE` |
+| 9.3 | Browser back/forward | S | History integration so navigation feels native. | `DONE` |
 
 ---
 
@@ -185,7 +185,7 @@
 | 12.1a | **Continuous deployment on push** | S | ✅ Working. Build `d57bb47` succeeded in 90s and shipped the current bundle. Fixed by declaring `build.command` in `wrangler.jsonc` rather than in the dashboard, so it cannot silently break again. | `DONE` |
 | 12.2 | Verify from a clean browser | S | ✅ Playwright against the live URL: canvas present, all 3 maps render, zero console errors, `bundle.bin` serves as 2,136,384 B `application/octet-stream`, unknown paths 404 (no SPA fallback masking). | `DONE` |
 | 12.3 | Check payload + load time | M | ⚠️ **7.0s to interactive** against a < 3s target. Cause: deck.gl ships 973 KB JS (284 KB gz) plus the 2.1 MB `bundle.bin`. Needs code-splitting / lazy deck.gl import and possibly a smaller first-paint payload. Carried into Phase 10 polish. | `TODO` |
-| 12.4 | Verify deep links work in production | S | Paste a copied URL into a fresh browser; it must restore the exact view. | `TODO` |
+| 12.4 | Verify deep links work in production | S | Verified locally in a fresh browser context. Re-verify against the live URL after this deploy. | `WIP` |
 
 ---
 

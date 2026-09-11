@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { loadBundle, maskReader } from './data/loader'
 import { Store } from './data/store'
 import { filterRows, aggregate, deadSpace, diffGrids } from './data/query'
@@ -13,6 +13,9 @@ import {
 import MapCanvas from './ui/MapCanvas'
 import LayerPanel from './ui/LayerPanel'
 import type { LayerId } from './ui/LayerPanel'
+import CopyLink from './ui/CopyLink'
+import { useUrlState, readInitialState } from './ui/useUrlState'
+import type { ViewState } from './state/url'
 import FilterRail from './ui/FilterRail'
 import FilterChips from './ui/FilterChips'
 import CompareBar, { makeFilterB } from './ui/CompareBar'
@@ -69,22 +72,35 @@ const DEATH_EVENTS = new Set(['BotKilled', 'Killed', 'KilledByStorm'])
 
 function Workspace({ store }: { store: Store }) {
   const maps = store.meta.dict.maps
-  // No date is set on purpose: the default view is ALL DAYS, and narrowing to one is a
-  // deliberate act. A tool that silently opens on a single day invites wrong conclusions.
-  const [filter, setFilter] = useState<Filter>(() => ({ map: maps[0] }))
-  const [active, setActive] = useState<Set<LayerId>>(() => new Set<LayerId>(['traffic', 'loot']))
+
+  /**
+   * Every piece of state below is seeded from the address bar, so opening a shared link lands
+   * directly on that view instead of rendering the default and then jumping.
+   *
+   * No date is set by default on purpose: the default view is ALL DAYS, and narrowing to one
+   * is a deliberate act. A tool that silently opens on a single day invites wrong conclusions.
+   */
+  const initial = useRef(readInitialState(store)).current
+
+  const [filter, setFilter] = useState<Filter>(initial.state.filter)
+  const [active, setActive] = useState<Set<LayerId>>(() => new Set(initial.state.layers))
+
+  // Comparison state. The B side is always "A with one dimension swapped".
+  const [compareMode, setCompareMode] = useState<CompareMode>(initial.state.compareMode)
+  const [compareDim, setCompareDim] = useState<CompareDim>(initial.state.compareDim)
+  const [compareValue, setCompareValue] = useState<string | null>(initial.state.compareValue)
 
   // Timeline state. `t` is the raw scrubber position: immediate, so the thumb and the clock
   // never lag the hand. The expensive work follows a throttled copy of it.
-  // Comparison state. The B side is always "A with one dimension swapped".
-  const [compareMode, setCompareMode] = useState<CompareMode>('single')
-  const [compareDim, setCompareDim] = useState<CompareDim>('day')
-  const [compareValue, setCompareValue] = useState<string | null>(null)
-
-  const [mode, setMode] = useState<TimeMode>('cumulative')
+  const [mode, setMode] = useState<TimeMode>(initial.state.timeMode)
+  // Playback is deliberately NOT restorable from a link. A shared view that starts playing
+  // takes control away from whoever opened it: share the position, never the motion.
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
-  const [t, setT] = useState(() => store.meta.stats.maxElapsedSeconds)
+  const [t, setT] = useState(() => initial.state.t ?? store.meta.stats.maxElapsedSeconds)
+
+  /** Anything the current data could not honour from the link, reported once. */
+  const [dropped, setDropped] = useState<string[]>(initial.dropped)
 
   const mapId = filter.map ?? maps[0]
   const config = store.meta.mapConfig[mapId]
@@ -151,9 +167,15 @@ function Workspace({ store }: { store: Store }) {
   const seek = (v: number) => { clock.seek(v); setT(v) }
 
   // Park the scrubber at the end of a newly clamped axis rather than stranding it beyond one.
+  // Skipped on the very first run when the link supplied a time, which would otherwise be
+  // overwritten the moment the page settled.
   // Declared after the clock: an earlier version sat above it and died on the temporal dead
   // zone, which blanked the whole app with only "Cannot access 'ne' before initialization".
-  useEffect(() => { clock.seek(maxT); setT(maxT); setPlaying(false) }, [maxT, clock])
+  const seededTime = useRef(initial.state.t !== null)
+  useEffect(() => {
+    if (seededTime.current) { seededTime.current = false; return }
+    clock.seek(maxT); setT(maxT); setPlaying(false)
+  }, [maxT, clock])
   const clearTime = () => { setMode('cumulative'); seek(maxT); setPlaying(false) }
 
   const toggle = (id: LayerId) =>
@@ -362,6 +384,38 @@ function Workspace({ store }: { store: Store }) {
     return out
   }, [active, trafficImg, dwellImg, coverage, paths, actors, loot, kills, deaths, diff])
 
+  /**
+   * The shareable view, assembled from the pieces above.
+   *
+   * `t` is stored as null when the timeline covers the whole match, so an unscrubbed view
+   * produces no time parameter and the default link stays bare.
+   */
+  const viewState = useMemo<ViewState>(() => ({
+    filter,
+    layers: [...active],
+    timeMode: mode,
+    t: timeActive ? Math.round(appliedT) : null,
+    compareMode,
+    compareDim,
+    compareValue,
+  }), [filter, active, mode, timeActive, appliedT, compareMode, compareDim, compareValue])
+
+  const applyFromHistory = (next: ViewState, drops: string[]) => {
+    setFilter(next.filter)
+    setActive(new Set(next.layers))
+    setMode(next.timeMode)
+    setCompareMode(next.compareMode)
+    setCompareDim(next.compareDim)
+    setCompareValue(next.compareValue)
+    setPlaying(false)
+    const nt = next.t ?? maxT
+    clock.seek(nt)
+    setT(nt)
+    setDropped(drops)
+  }
+
+  useUrlState(viewState, store, applyFromHistory)
+
   const counts: Partial<Record<LayerId, number>> = {
     loot: loot.length, kills: kills.length, deaths: deaths.length,
     paths: paths.length, actors: actors.length, dead: coverage?.dead.length,
@@ -371,6 +425,7 @@ function Workspace({ store }: { store: Store }) {
     <div className="app">
       <header className="app-header">
         <h1 className="app-title">LILA BLACK</h1>
+        <CopyLink />
         <CompareBar
           store={store}
           mode={compareMode}
@@ -425,6 +480,17 @@ function Workspace({ store }: { store: Store }) {
           <EmptyState filter={effective} store={store} onChange={setFilter} onClearTime={clearTime} />
         )}
         {compareMode === 'diff' && <DiffNote comparing={comparing} diff={diff} />}
+        {dropped.length > 0 && (
+          <div className="link-note" role="status">
+            <span>
+              This link was made against different data.{' '}
+              {dropped.join('. ')}. Everything else was restored.
+            </span>
+            <button type="button" className="map-control" onClick={() => setDropped([])}>
+              Dismiss
+            </button>
+          </div>
+        )}
       </div>
 
       <Timeline
