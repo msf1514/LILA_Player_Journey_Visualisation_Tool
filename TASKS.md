@@ -122,10 +122,10 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 7.1 | **Difference view — PRIMARY (D16)** | L | One map, colour = *change*. 🔴 more now · 🔵 less now · ⬛ no meaningful change. Human eyes are poor at diffing two heatmaps side by side; the delta makes the change itself the picture. | `TODO` |
-| 7.2 | Side-by-side compare — secondary | M | Two canvases, shared or unlinked filters. Good for context, weaker for detection. | `TODO` |
-| 7.3 | Comparison dimensions | S | Date vs date · map vs map · humans vs bots · match vs match. | `TODO` |
-| 7.4 | Normalisation in diffs | M | **Critical:** daily volume falls 98→47 players, so raw counts always show "less." Normalise to *share of traffic*, not absolute counts, or every diff is a lie. | `TODO` |
+| 7.1 | **Difference view — PRIMARY (D16)** | L | One map, colour = *change*. 🔴 more now · 🔵 less now · ⬛ no meaningful change. Human eyes are poor at diffing two heatmaps side by side; the delta makes the change itself the picture. | `DONE` |
+| 7.2 | Side-by-side compare — secondary | M | Two canvases, shared or unlinked filters. Good for context, weaker for detection. | `DONE` |
+| 7.3 | Comparison dimensions | S | Date vs date · map vs map · humans vs bots · match vs match. | `DONE` |
+| 7.4 | Normalisation in diffs | M | **Critical:** daily volume falls 98→47 players, so raw counts always show "less." Normalise to *share of traffic*, not absolute counts, or every diff is a lie. | `DONE` |
 
 ---
 

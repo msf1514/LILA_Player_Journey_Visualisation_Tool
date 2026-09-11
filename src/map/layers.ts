@@ -21,7 +21,7 @@
 import { BitmapLayer, ScatterplotLayer, PathLayer, PolygonLayer, IconLayer } from 'deck.gl'
 import type { Layer } from 'deck.gl'
 import type { Store } from '../data/store'
-import type { MapConfig } from '../data/types'
+import type { Grid, MapConfig } from '../data/types'
 import { worldToUV, uvToWorldSpace, MAP_BOUNDS, S } from './project'
 import { iconAtlas, rampDwell, rampTraffic, token, tokenA } from './theme'
 import type { RGB, ShapeName } from './theme'
@@ -432,4 +432,108 @@ export function actorLayer(points: { position: [number, number]; bot: boolean }[
 export function legendColor(name: string): string {
   const [r, g, b] = token(name)
   return `rgb(${r} ${g} ${b})`
+}
+
+// ─── Difference view ────────────────────────────────────────────────────────
+
+/**
+ * Minimum raw support a cell needs on at least one side before its delta is drawn.
+ *
+ * Normalisation makes two differently-sized samples comparable, but it does NOT make a small
+ * sample reliable. Ambrose Valley has 201 matches on Feb 10 and 24 on Feb 14: in a 24-match
+ * day one player's route is a large share of the total, so a cell they happened to cross
+ * produces a dramatic delta that is sampling noise rather than behaviour.
+ *
+ * The rule is deliberately "either side", not "both". A cell with nothing on one side and
+ * plenty on the other is a real finding - an area that started or stopped being used - and
+ * suppressing it would hide exactly what a designer is looking for.
+ */
+export const MIN_DIFF_SUPPORT = 5
+
+export interface DiffStats {
+  /** Cells drawn after the support threshold. */
+  shown: number
+  /** Cells suppressed for having too little data on either side. */
+  suppressed: number
+  /** Largest absolute share delta actually drawn. */
+  maxDelta: number
+}
+
+/**
+ * Bake a signed difference grid into a diverging texture.
+ *
+ * Symmetric about zero so neither direction reads louder than the other: an eye drawn to red
+ * would make every comparison look like growth. Near-zero is transparent rather than a
+ * midpoint colour, so the map underneath stays readable where nothing changed, which is most
+ * of it.
+ *
+ * `diff` must come from diffGrids, which already normalises both sides to share of total.
+ * Diffing raw counts here would report the volume collapse (201 matches down to 24) as a
+ * map-wide behaviour change.
+ */
+export function diffImage(
+  diff: Grid,
+  supportA: Grid,
+  supportB: Grid,
+  minSupport = MIN_DIFF_SUPPORT,
+): { canvas: HTMLCanvasElement; stats: DiffStats } {
+  const n = diff.size
+  const neg = token('--diff-neg')
+  const pos = token('--diff-pos')
+
+  // Scale to a high percentile of the drawn deltas rather than the maximum, so one extreme
+  // cell cannot flatten every other difference to invisibility.
+  const magnitudes: number[] = []
+  for (let i = 0; i < n * n; i++) {
+    if (Math.max(supportA.values[i], supportB.values[i]) < minSupport) continue
+    const m = Math.abs(diff.values[i])
+    if (m > 0) magnitudes.push(m)
+  }
+  magnitudes.sort((a, b) => a - b)
+  const scale = magnitudes.length ? magnitudes[Math.floor(magnitudes.length * 0.97)] || 1 : 1
+
+  const canvas = document.createElement('canvas')
+  canvas.width = n
+  canvas.height = n
+  const ctx = canvas.getContext('2d')!
+  const img = ctx.createImageData(n, n)
+
+  let shown = 0
+  let suppressed = 0
+  let maxDelta = 0
+
+  for (let i = 0; i < n * n; i++) {
+    const support = Math.max(supportA.values[i], supportB.values[i])
+    if (support <= 0) continue
+    if (support < minSupport) { suppressed++; continue }
+
+    const d = diff.values[i]
+    const t = Math.min(1, Math.abs(d) / scale)
+    if (t <= 0.06) continue          // no meaningful change: leave the map showing through
+
+    shown++
+    if (Math.abs(d) > maxDelta) maxDelta = Math.abs(d)
+
+    const c = d > 0 ? pos : neg
+    const o = i * 4
+    img.data[o] = c[0]
+    img.data[o + 1] = c[1]
+    img.data[o + 2] = c[2]
+    img.data[o + 3] = Math.min(225, 30 + t * 195)
+  }
+
+  ctx.putImageData(img, 0, 0)
+  return { canvas, stats: { shown, suppressed, maxDelta } }
+}
+
+/** Diff layer. Same bake-to-texture approach as the heat layers, for the same reason. */
+export function diffLayer(image: HTMLCanvasElement): Layer {
+  return new BitmapLayer({
+    id: 'diff',
+    image,
+    bounds: MAP_BOUNDS,
+    opacity: 0.85,
+    textureParameters: { minFilter: 'linear', magFilter: 'linear' },
+    pickable: false,
+  })
 }

@@ -375,3 +375,55 @@
 @media (prefers-reduced-motion: reduce) {
   .tl-range { transition: none; }
 }
+
+/* ── Comparison ──────────────────────────────────────────────────────────── */
+.compare-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-xs);
+  color: var(--text-2);
+}
+.compare-label { display: inline-flex; align-items: center; gap: var(--space-2); }
+.compare-select { width: auto; padding: 3px var(--space-2); font-size: var(--text-xs); }
+.compare-counts b { color: var(--text-1); font-weight: 500; }
+.compare-warn { color: var(--text-3); }
+
+.diff-legend { display: inline-flex; align-items: center; gap: 6px; }
+.diff-swatch { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+.diff-neg { background: var(--diff-neg); }
+.diff-pos { background: var(--diff-pos); }
+
+.diff-note {
+  position: absolute;
+  left: 50%;
+  bottom: var(--space-4);
+  transform: translateX(-50%);
+  padding: var(--space-2) var(--space-4);
+  background: var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  color: var(--text-2);
+  box-shadow: var(--shadow-2);
+}
+
+/* Two canvases, split evenly. A divider keeps it clear which map is which. */
+.app-canvas-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); }
+.app-canvas-split > div { position: relative; min-width: 0; }
+
+.layer-note {
+  position: absolute;
+  top: var(--space-3);
+  left: var(--space-3);
+  width: 214px;
+  padding: var(--space-3);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  font-size: var(--text-xs);
+  color: var(--text-2);
+  line-height: var(--leading-body);
+}

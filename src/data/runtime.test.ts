@@ -243,3 +243,82 @@ describe('dead space', () => {
     expect(coverage[0].map).toBe('Lockdown')
   })
 })
+
+/**
+ * Difference-view invariants.
+ *
+ * These sit with the runtime tests rather than in a browser because the two properties that
+ * matter are arithmetic, not visual: a diff must be blind to volume, and it must refuse to
+ * report a difference it cannot support.
+ */
+describe('difference view invariants', () => {
+  const gridFor = (f: Parameters<typeof filterRows>[1]) =>
+    aggregate(store, filterRows(store, f), 64, 'traffic')
+
+  it('reports no change when a day is compared against itself', () => {
+    // The strongest single check that normalisation works. If the diff were reading raw
+    // counts this would still be zero, so it is paired with the volume test below.
+    const g = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-10', dateTo: '2026-02-10' })
+    const d = diffGrids(g, g)
+    expect(d.max).toBe(0)
+  })
+
+  it('is blind to volume: Feb 10 has 201 matches, Feb 14 has 24', () => {
+    // Ambrose Valley loses 88% of its daily matches across the window. A raw-count diff would
+    // be dominated by that collapse and paint the whole map one colour. Measured: traffic
+    // totals 10,879 against 1,439, yet the largest share delta is 0.0049.
+    const a = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-10', dateTo: '2026-02-10' })
+    const b = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-14', dateTo: '2026-02-14' })
+    expect(a.total).toBeGreaterThan(b.total * 5)      // volumes really are far apart
+    expect(diffGrids(a, b).max).toBeLessThan(0.02)    // yet the share delta stays small
+  })
+
+  it('shows MORE apparent change against the thinnest day, which is the noise trap', () => {
+    // Normalisation fixes volume; it does not make 24 matches a reliable sample. In a thin
+    // day one player's route is a large share of the total, so deltas swing wider even
+    // though behaviour has not changed more. Measured max deltas from Feb 10: 0.0016 against
+    // Feb 11 (135 matches), 0.0049 against Feb 14 (24 matches).
+    //
+    // This is why the renderer suppresses low-support cells and the UI states each side's
+    // match count: without both, a designer reads sampling noise as a behaviour shift.
+    const base = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-10', dateTo: '2026-02-10' })
+    const fat = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-11', dateTo: '2026-02-11' })
+    const thin = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-14', dateTo: '2026-02-14' })
+    expect(thin.total).toBeLessThan(fat.total / 3)
+    expect(diffGrids(base, thin).max).toBeGreaterThan(diffGrids(base, fat).max)
+  })
+
+  it('sums to zero, because both sides are shares of their own total', () => {
+    const a = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-10', dateTo: '2026-02-10' })
+    const b = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-13', dateTo: '2026-02-13' })
+    const d = diffGrids(a, b)
+    let sum = 0
+    for (let i = 0; i < d.values.length; i++) sum += d.values[i]
+    expect(Math.abs(sum)).toBeLessThan(1e-5)
+  })
+
+  it('detects a real distribution shift between humans and bots', () => {
+    // Measured 0.0033. Thresholds here come from measurement, not from a guess: an earlier
+    // version asserted > 0.005 and failed, because share deltas spread across ~1,600 cells
+    // are small in absolute terms even when the shift is real.
+    const a = gridFor({ map: 'AmbroseValley', actor: 'human' })
+    const b = gridFor({ map: 'AmbroseValley', actor: 'bot' })
+    expect(diffGrids(a, b).max).toBeGreaterThan(0.002)
+  })
+
+  it('has cells that the support threshold would suppress on a thin day', () => {
+    // Feb 14 on Ambrose is 24 matches. Plenty of its occupied cells carry only a handful of
+    // passes, and those are exactly the cells whose share swings wildly. The renderer drops
+    // them; this asserts they genuinely exist rather than being a theoretical worry.
+    const thin = gridFor({ map: 'AmbroseValley', dateFrom: '2026-02-14', dateTo: '2026-02-14' })
+    let low = 0
+    let high = 0
+    for (let i = 0; i < thin.values.length; i++) {
+      const v = thin.values[i]
+      if (v > 0 && v < 5) low++
+      if (v >= 5) high++
+    }
+    expect(low).toBeGreaterThan(0)
+    expect(high).toBeGreaterThan(0)
+  })
+})

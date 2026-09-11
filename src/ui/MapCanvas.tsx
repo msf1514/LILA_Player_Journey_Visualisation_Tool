@@ -27,6 +27,13 @@ export interface MapCanvasProps {
   focus?: UVBounds
   /** deck.gl tooltip callback for pickable layers. */
   getTooltip?: (info: { object?: unknown }) => { text: string; style?: Record<string, string> } | null
+  /**
+   * Externally owned view state. Supplying both of these makes the canvas controlled, which
+   * is what links two canvases in side-by-side mode: panning one must pan the other, or the
+   * two maps cannot be compared at all.
+   */
+  viewState?: ViewState
+  onViewState?: (v: ViewState) => void
 }
 
 /**
@@ -42,7 +49,11 @@ export interface MapCanvasProps {
  * correct on a symmetric map while being wrong everywhere else, which is the worst
  * available way for this to fail.
  */
-export default function MapCanvas({ mapId, config, layers = [], focus = FULL_BOUNDS, getTooltip }: MapCanvasProps) {
+export default function MapCanvas({
+  mapId, config, layers = [], focus = FULL_BOUNDS, getTooltip,
+  viewState: externalView, onViewState,
+}: MapCanvasProps) {
+  const linked = externalView !== undefined && onViewState !== undefined
   const hostRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [viewState, setViewState] = useState<ViewState>(() => initialViewState())
@@ -87,8 +98,10 @@ export default function MapCanvas({ mapId, config, layers = [], focus = FULL_BOU
     // Panning is continuous input. It is never eased: adding a transition here puts lag
     // between the designer's hand and the map.
     touched.current = true
-    setViewState({ ...next, transitionDuration: 0 })
-  }, [])
+    const v = { ...next, transitionDuration: 0 }
+    if (onViewState) onViewState(v)
+    else setViewState(v)
+  }, [onViewState])
 
   const reset = useCallback(() => {
     // Reset is an occasional action, so it is the one place a transition earns its keep.
@@ -113,7 +126,7 @@ export default function MapCanvas({ mapId, config, layers = [], focus = FULL_BOU
     <div ref={hostRef} style={{ position: 'relative', width: '100%', height: '100%', background: 'var(--bg-0)' }}>
       <DeckGL
         views={view}
-        viewState={viewState}
+        viewState={linked ? externalView : viewState}
         onViewStateChange={onViewStateChange as never}
         controller={{ dragRotate: false, doubleClickZoom: true, scrollZoom: { speed: 0.012, smooth: false } }}
         layers={[minimap, ...layers]}

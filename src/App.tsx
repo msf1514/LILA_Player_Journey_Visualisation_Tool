@@ -1,19 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { loadBundle, maskReader } from './data/loader'
 import { Store } from './data/store'
-import { filterRows, aggregate, deadSpace } from './data/query'
+import { filterRows, aggregate, deadSpace, diffGrids } from './data/query'
 import type { Filter } from './data/types'
 import { worldToUV, uvToWorldSpace, padBounds } from './map/project'
 import type { UVBounds } from './map/project'
 import {
   GRID_SIZE, heatPoints, trafficImage, dwellImage, heatLayer, deadSpaceLayer,
   collectEvents, eventLayer, buildPaths, pathLayer, actorLayer, eventStyle,
+  diffImage, diffLayer,
 } from './map/layers'
 import MapCanvas from './ui/MapCanvas'
 import LayerPanel from './ui/LayerPanel'
 import type { LayerId } from './ui/LayerPanel'
 import FilterRail from './ui/FilterRail'
 import FilterChips from './ui/FilterChips'
+import CompareBar, { makeFilterB } from './ui/CompareBar'
+import type { CompareDim, CompareMode } from './ui/CompareBar'
 import Timeline, { STORM_FLOOR_S, WINDOW_S, mmss } from './ui/Timeline'
 import type { TimeMode } from './ui/Timeline'
 import { usePlayback, useThrottled } from './ui/usePlayback'
@@ -73,6 +76,11 @@ function Workspace({ store }: { store: Store }) {
 
   // Timeline state. `t` is the raw scrubber position: immediate, so the thumb and the clock
   // never lag the hand. The expensive work follows a throttled copy of it.
+  // Comparison state. The B side is always "A with one dimension swapped".
+  const [compareMode, setCompareMode] = useState<CompareMode>('single')
+  const [compareDim, setCompareDim] = useState<CompareDim>('day')
+  const [compareValue, setCompareValue] = useState<string | null>(null)
+
   const [mode, setMode] = useState<TimeMode>('cumulative')
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(1)
@@ -265,11 +273,84 @@ function Workspace({ store }: { store: Store }) {
     return uMax > uMin ? padBounds([uMin, vMin, uMax, vMax], 0.06) : [0, 0, 1, 1]
   }, [store, mapId, config])
 
+  // ── Comparison ───────────────────────────────────────────────────────────
+  const comparing = compareMode !== 'single' && compareValue !== null
+
+  const filterB = useMemo<Filter | null>(
+    () => (comparing ? makeFilterB(effective, compareDim, compareValue!) : null),
+    [comparing, effective, compareDim, compareValue],
+  )
+
+  const rowsB = useMemo(
+    () => (filterB ? filterRows(store, filterB) : null),
+    [store, filterB],
+  )
+
+  /** Match counts per side. Sample size decides whether a difference is readable at all. */
+  const matchCount = (f: Filter | null) => {
+    if (!f) return 0
+    const map = f.map ?? maps[0]
+    const from = f.dateFrom
+    const ids = f.matchIds ? new Set(f.matchIds) : null
+    let n = 0
+    store.meta.matchMeta.forEach((m, i) => {
+      if (m.map !== map) return
+      if (from && (m.date < from || m.date > (f.dateTo ?? from))) return
+      if (ids && !ids.has(store.matchId(i))) return
+      n++
+    })
+    return n
+  }
+  const countA = useMemo(() => matchCount(effective), [store, effective])
+  const countB = useMemo(() => matchCount(filterB), [store, filterB])
+
+  /**
+   * Difference texture.
+   *
+   * Both sides are aggregated with the same measure and grid, then diffGrids normalises each
+   * to SHARE of its own total. That normalisation is not optional: matches per day on Ambrose
+   * fall from 201 to 24 across the window, so a raw-count diff would paint every later day
+   * "less everywhere" and read as the map being abandoned.
+   */
+  const diff = useMemo(() => {
+    if (compareMode !== 'diff' || !rowsB) return null
+    const gridA = aggregate(store, positionRows, GRID_SIZE, 'traffic')
+    const posB = filterRows(store, { ...filterB!, events: intersectEvents(filter.events, POSITION_EVENTS) })
+    const gridB = aggregate(store, posB, GRID_SIZE, 'traffic')
+    if (gridA.total === 0 || gridB.total === 0) return null
+    return { ...diffImage(diffGrids(gridA, gridB), gridA, gridB), gridA, gridB }
+  }, [compareMode, store, positionRows, rowsB, filterB, filter.events])
+
+  /** Side-by-side needs one shared view state, or the two maps cannot be compared. */
+  const [sharedView, setSharedView] = useState<SharedView | undefined>(undefined)
+
+  const layersB = useMemo(() => {
+    if (compareMode !== 'side' || !rowsB || !filterB) return []
+    const posB = filterRows(store, { ...filterB, events: intersectEvents(filter.events, POSITION_EVENTS) })
+    const out = []
+    if (active.has('traffic')) out.push(heatLayer('traffic-b', trafficImage(heatPoints(store, posB, config, 'traffic'))))
+    if (active.has('loot')) out.push(eventLayer('loot-b', collectEvents(store, rowsB, config, LOOT_EVENTS), 9))
+    if (active.has('kills')) out.push(eventLayer('kills-b', collectEvents(store, rowsB, config, KILL_EVENTS), 12))
+    if (active.has('deaths')) out.push(eventLayer('deaths-b', collectEvents(store, rowsB, config, DEATH_EVENTS), 13))
+    return out
+  }, [compareMode, store, rowsB, filterB, config, active, filter.events])
+
   // Layers are built fresh every render on purpose. deck.gl layers are single-use
   // descriptors: reusing an instance breaks the lifecycle and it stops drawing, silently.
   // The expensive inputs above are memoised instead.
   const layers = useMemo(() => {
     const out = []
+
+    /**
+     * Difference mode draws the delta and NOTHING else.
+     *
+     * Every other layer is built from side A alone, so overlaying them on an A-versus-B delta
+     * mixes two incompatible things in one picture. A designer seeing side A's loot markers
+     * sitting on top of the comparison would reasonably take them as part of it, and conclude
+     * that loot moved when all they are looking at is where loot was on one of the two days.
+     */
+    if (diff) { out.push(diffLayer(diff.canvas)); return out }
+
     if (trafficImg) out.push(heatLayer('traffic', trafficImg))
     if (dwellImg) out.push(heatLayer('dwell', dwellImg))
     if (active.has('dead') && coverage) out.push(deadSpaceLayer(coverage.dead, coverage.size))
@@ -279,7 +360,7 @@ function Workspace({ store }: { store: Store }) {
     if (active.has('kills')) out.push(eventLayer('kills', kills, 12))
     if (active.has('deaths')) out.push(eventLayer('deaths', deaths, 13))
     return out
-  }, [active, trafficImg, dwellImg, coverage, paths, actors, loot, kills, deaths])
+  }, [active, trafficImg, dwellImg, coverage, paths, actors, loot, kills, deaths, diff])
 
   const counts: Partial<Record<LayerId, number>> = {
     loot: loot.length, kills: kills.length, deaths: deaths.length,
@@ -290,6 +371,18 @@ function Workspace({ store }: { store: Store }) {
     <div className="app">
       <header className="app-header">
         <h1 className="app-title">LILA BLACK</h1>
+        <CompareBar
+          store={store}
+          mode={compareMode}
+          dim={compareDim}
+          value={compareValue}
+          filter={effective}
+          countA={countA}
+          countB={countB}
+          onMode={setCompareMode}
+          onDim={setCompareDim}
+          onValue={setCompareValue}
+        />
         <FilterChips
           store={store}
           filter={filter}
@@ -301,12 +394,37 @@ function Workspace({ store }: { store: Store }) {
 
       <FilterRail store={store} filter={filter} onChange={setFilter} eventCounts={eventCounts} />
 
-      <div className="app-canvas">
-        <MapCanvas mapId={mapId} config={config} layers={layers} focus={focus} getTooltip={tooltip} />
-        <LayerPanel active={active} onToggle={toggle} counts={counts} />
-        {rows.length === 0 && (
+      <div className={compareMode === 'side' ? 'app-canvas app-canvas-split' : 'app-canvas'}>
+        <MapCanvas
+          mapId={mapId}
+          config={config}
+          layers={layers}
+          focus={focus}
+          getTooltip={tooltip}
+          viewState={compareMode === 'side' ? sharedView : undefined}
+          onViewState={compareMode === 'side' ? setSharedView : undefined}
+        />
+        {compareMode === 'side' && filterB && (
+          <MapCanvas
+            mapId={filterB.map ?? mapId}
+            config={store.meta.mapConfig[filterB.map ?? mapId]}
+            layers={layersB}
+            focus={focus}
+            viewState={sharedView}
+            onViewState={setSharedView}
+          />
+        )}
+        {compareMode === 'single' && <LayerPanel active={active} onToggle={toggle} counts={counts} />}
+        {compareMode === 'diff' && (
+          <div className="layer-note" role="note">
+            Difference mode shows the change in traffic share only. Layers come from one side
+            at a time, so they are hidden here. Switch to single or side by side to use them.
+          </div>
+        )}
+        {rows.length === 0 && compareMode !== 'side' && (
           <EmptyState filter={effective} store={store} onChange={setFilter} onClearTime={clearTime} />
         )}
+        {compareMode === 'diff' && <DiffNote comparing={comparing} diff={diff} />}
       </div>
 
       <Timeline
@@ -402,6 +520,35 @@ function EmptyState({
       </div>
     </div>
   )
+}
+
+/** deck.gl view state, mirrored here so two canvases can share one. */
+interface SharedView {
+  target: [number, number, number]
+  zoom: number
+  minZoom?: number
+  maxZoom?: number
+  transitionDuration?: number
+}
+
+/**
+ * Says why a difference cannot be drawn, instead of rendering an empty map.
+ *
+ * A blank difference view is ambiguous: it could mean "nothing changed", which is a real and
+ * useful answer, or it could mean "this comparison was never computed". Those must not look
+ * the same.
+ */
+function DiffNote({ comparing, diff }: { comparing: boolean; diff: { stats: { shown: number; suppressed: number } } | null }) {
+  let text: string | null = null
+  if (!comparing) text = 'Choose something to compare against.'
+  else if (!diff) text = 'One side has no data on this map, so there is nothing to compare.'
+  else if (diff.stats.shown === 0) {
+    text = diff.stats.suppressed > 0
+      ? `No difference worth showing. ${diff.stats.suppressed.toLocaleString()} cells had too little data on both sides.`
+      : 'No meaningful difference between these two.'
+  }
+  if (!text) return null
+  return <div className="diff-note" role="status">{text}</div>
 }
 
 function tooltip({ object }: { object?: unknown }) {

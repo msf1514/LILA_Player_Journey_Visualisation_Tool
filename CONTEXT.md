@@ -56,8 +56,8 @@ produces a finding, a decision, a correction, code, or progress.
 **Deadline:** 5 days from receipt · **Effort budget:** no fixed hour cap (D19); deadline is the constraint
 **Repo:** https://github.com/msf1514/LILA_Player_Journey_Visualisation_Tool (public)
 **Live:** https://lila-pjvt.msf1514.workers.dev — Cloudflare Worker + Static Assets, auto-deploys on push to `main`
-**Phase:** **Phases 0–6 COMPLETE.** Pipeline, runtime, canvas, layers, filters and the timeline verified; 63 tests green.
-**Next action:** Phase 7 — difference view (share-normalised) and side-by-side compare
+**Phase:** **Phases 0–7 COMPLETE.** Pipeline, runtime, canvas, layers, filters, timeline and comparison verified; 69 tests green.
+**Next action:** Phase 8 — hotspot ranking and drill-down
 
 Docs: `CONTEXT.md` (facts/decisions) · `TASKS.md` (checklist) · `BUILD_LOG.md` (activity log w/ evidence)
 
@@ -490,6 +490,23 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 ---
 
 ## 10. CHANGELOG (newest first)
+
+### 2026-09-11 - PHASE 7 COMPLETE (comparison)
+- Difference view (primary), side-by-side with linked panning (secondary), comparing by day,
+  map, actor or match. **69 tests pass**, tsc clean, zero console errors.
+- **Normalisation proven, not asserted:** a day compared against itself gives a max share delta
+  of exactly **0.00000**. Paired with Feb 10 vs Feb 14, where traffic totals differ 7.5x
+  (10,879 vs 1,439) yet the share delta stays at 0.0049.
+- **The small-sample trap is now measured.** Feb 14 (24 matches) produces the LARGEST delta
+  against Feb 10 of any day - 0.0049, versus 0.0016 for Feb 11 (135 matches) - purely because
+  a thin sample swings. Hence `MIN_DIFF_SUPPORT`, suppressing low-support cells, plus both
+  sides' match counts and a warning under 30 matches. A test asserts the ordering.
+- **Difference mode draws the delta and nothing else.** Caught by looking: side A's loot
+  markers were overlaying an A-versus-B delta, which a designer would read as part of the
+  comparison. Every other layer comes from one side alone, so none belong in a diff.
+- Test thresholds were set from measurement after one failed on a guess (asserted > 0.005 for
+  the human-vs-bot shift; real value 0.0033).
+- **Next: Phase 8 - hotspot ranking and drill-down from a hot cell to the individual runs.**
 
 ### 2026-09-11 - PHASE 6 COMPLETE (timeline and playback)
 - Scrubber on MATCH-ELAPSED time with playback, speed control, cumulative vs last-30s mode,

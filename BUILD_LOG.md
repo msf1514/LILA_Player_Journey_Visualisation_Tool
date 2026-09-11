@@ -39,6 +39,72 @@
 
 ---
 
+## 2026-09-11 - Phase 7 - Comparison
+**Tasks:** 7.1 - 7.4   **Commit:** _(this commit)_   **Status:** DONE
+
+### Did
+- `src/map/layers.ts` - `diffImage` bakes a signed grid into a diverging texture, symmetric
+  about zero, transparent where nothing changed, with a support threshold. `diffLayer` draws it.
+- `src/ui/CompareBar.tsx` - mode control (single / difference / side by side), a B side
+  defined as "A with one dimension swapped" (day, map, actor or match), both sides' match
+  counts, and a thin-sample warning.
+- `src/ui/MapCanvas.tsx` - optional controlled view state, so two canvases pan together.
+- `src/App.tsx` - comparison state, diff computation, split canvas layout.
+
+### Verified
+| Check | Result |
+|---|---|
+| `npm test` | **69 passed** (63 + 6 new diff invariants) |
+| `npx tsc -b` | exit 0 |
+| Console errors | none across mode switches and both sides changing |
+| Match counts shown | "201 vs 78 matches", "201 vs 24 matches" |
+| Thin-sample warning | fires at 24 matches: "one side has under 30 matches, so treat small differences as noise" |
+| Side by side | two canvases, panning one moves both |
+
+Measured diff magnitudes (Ambrose Valley, traffic, 64x64 grid):
+
+| Comparison | max share delta | traffic totals |
+|---|---|---|
+| **Same day against itself** | **0.00000** | 10,879 / 10,879 |
+| Feb 10 vs Feb 11 | 0.00158 | 10,879 / 6,157 |
+| Feb 10 vs Feb 13 | 0.00202 | 10,879 / 3,464 |
+| **Feb 10 vs Feb 14** (201 vs 24 matches) | **0.00488** | 10,879 / 1,439 |
+| Humans vs bots | 0.00329 | 18,413 / 7,374 |
+
+**Looked at it:** Feb 10 against Feb 13 shows red and blue both present in plausible places -
+blue through the centre and main routes, red at the edges and the north-west compound. Not one
+flat colour, which is what a volume-reading diff would produce.
+
+### Notes
+- **The zero is the proof.** A day compared against itself gives a max delta of exactly
+  0.00000. If the diff were secretly reading raw counts that would still be zero, so it is
+  paired with the Feb 10 vs Feb 14 case: traffic totals differ by 7.5x while the share delta
+  stays at 0.0049.
+- **The small-sample trap is now measured, not assumed.** Feb 14 has the LARGEST delta against
+  Feb 10 of any day (0.0049 against 0.0016 for Feb 11), purely because 24 matches is a thin
+  sample where one player's route is a large share. A test asserts this ordering, so the
+  reason the support threshold and the match-count display exist is encoded rather than
+  described.
+- **Test thresholds came from measurement after one failed on a guess.** An early assertion
+  used `> 0.005` for the human-vs-bot shift; the real value is 0.0033. Share deltas spread
+  across ~1,600 cells are small in absolute terms even when the shift is real, so the
+  magnitudes were measured in a standalone script and the thresholds set from them.
+- **Difference mode draws the delta and nothing else.** Caught by looking at a screenshot:
+  side A's green loot markers were sitting on top of an A-versus-B delta, and a designer would
+  reasonably read them as part of the comparison. Every other layer is built from one side
+  alone, so none of them belong in a diff.
+- Third temporal-dead-zone crash of the project: the comparison block was inserted below the
+  `layers` memo that consumes it, blanking the app with only "Cannot access 'Xt' before
+  initialization". Moved above. Worth a standing habit: in a long component, declare derived
+  state above every memo that reads it.
+
+### Files
+Created: `src/ui/CompareBar.tsx`
+Modified: `src/map/layers.ts` - `src/ui/MapCanvas.tsx` - `src/App.tsx` -
+`src/ui/controls.css` - `src/data/runtime.test.ts`
+
+---
+
 ## 2026-09-11 - Phase 6 - Timeline and playback
 **Tasks:** 6.1 - 6.5   **Commit:** _(this commit)_   **Status:** DONE
 
