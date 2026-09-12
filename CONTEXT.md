@@ -491,6 +491,34 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-12 - ENHANCEMENTS 1-4 (jitter, LOD, insights, walkthrough)
+Four independent, gated changes on top of the five stages. 106 tests pass, zero console errors,
+no new tsc errors. Not yet committed at time of writing.
+
+- **1. Side-by-side jitter fixed.** `MapCanvas.onViewStateChange` now propagates to the shared
+  view only for user-driven changes (`interactionState`), not deck.gl's own clamp/echo emits.
+  Two linked maps with different zoom limits no longer oscillate. Verified: mid-drag held and
+  post-drag idle are byte-stable, linked panning still syncs, single/diff unchanged.
+- **2. Level-of-detail marker clustering.** `MapCanvas` reports a half-step zoom bucket; below
+  zoom 1 the loot/kills/deaths markers bin per event type into size-scaled clusters
+  (`clusterEvents` in layers.ts, `eventClusterLayer` in deckLayers.ts), above it they resolve to
+  individuals. Count on hover. Cell = 56px x 2^(-bucket); rebuilds on bucket change only. First
+  attempt used per-cell count labels (too noisy) - switched to size + hover. `cluster.test.ts`.
+- **3. Deterministic insight layer.** New Insights tab. `insightsData.ts::computeInsights` reads
+  five findings from the bundle (unconcentration 4.1%, bot vs PvP 2,410 vs 3, survivorship 95 of
+  566 at 10:55, coverage 83%, volume 201->1); clicking one applies the demonstrating view via the
+  existing setters, so the URL updates and is shareable. `insightsData.test.ts`. (Logic file is
+  `insightsData.ts` not `insights.ts` to avoid a Windows case clash with `Insights.tsx`.)
+- **4. First-run guided walkthrough.** `Walkthrough.tsx` spotlights 8 anchors in order (map,
+  layers, filter, timeline, hotspots, compare, data notes, insights) with a tooltip card,
+  Back/Next/Skip, keyboard, focus. Replaces the old one-line hint. Shows once (localStorage,
+  guarded), re-openable via a header "Tour" button, skips anchors that are off screen. Verified:
+  all 8 spotlights geometrically aligned, dismiss persists across reload, re-opens, no viewport
+  overflow at 400px.
+- All four compose without breaking each other or the five stages (toured every state, zero
+  errors). Scope respected: only src/ui, src/map, src/App.tsx, src/ui/controls.css touched; no
+  pipeline/ or src/data/ parsing changes.
+
 ### 2026-09-12 - STAGE 5 COMPLETE (design pass) - ALL FIVE STAGES DONE
 - Reviewed every major state together at 1440x900 (default, hotspots, filtered, difference,
   side-by-side with and without a comparison, data notes, data manager). The interface already

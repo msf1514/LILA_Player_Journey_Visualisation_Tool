@@ -39,6 +39,52 @@
 
 ---
 
+## 2026-09-12 - Enhancements 1-4 (post-stage)
+**Status:** DONE (uncommitted at time of writing)   **Tests:** 106 pass · 0 console errors · no new tsc errors
+
+### 1. Side-by-side jitter
+- Cause: `MapCanvas.onViewStateChange` propagated every emit to the shared view, including deck.gl
+  clamp/echo emits; two linked maps with different zoom limits oscillated.
+- Fix: propagate only user-driven changes (`interactionState.isDragging/isPanning/isZooming/isRotating`).
+- Verified: mid-drag held + post-drag idle byte-stable (compare-by-map Ambrose/Grand Rift); linked
+  pan still syncs; single-mode pan and diff unchanged. Files: `src/ui/MapCanvas.tsx`.
+
+### 2. Level-of-detail marker clustering
+- `MapCanvas` reports a half-step zoom bucket (`onZoom`); `clusterEvents` (layers.ts) bins per
+  event type; `eventClusterLayer` (deckLayers.ts) draws size-scaled clusters below zoom 1,
+  individuals above. Count on hover. Cell = 56px x 2^(-bucket); memo keyed on bucket, not pan.
+- Course-correction: dropped per-cell count labels (noisier than the blob) for size + hover.
+- Verified by looking: `c2_zoomedout.png` (legible clusters) vs `c2_zoomedin.png` (individuals);
+  hover "42 x Loot pickup". Heat/hotspots/paths/diff/side untouched. `src/map/cluster.test.ts` (4).
+- Files: `src/map/layers.ts` `src/map/deckLayers.ts` `src/ui/MapCanvas.tsx` `src/ui/MapStage.tsx`
+  `src/App.tsx` (zoomBucket + cluster tooltip).
+
+### 3. Deterministic insight layer
+- `src/ui/insightsData.ts::computeInsights` reads 5 findings from the bundle; `src/ui/Insights.tsx`
+  renders a new Insights tab; clicking applies the demonstrating ViewState via existing setters so
+  the URL reflects it. `src/ui/insightsData.test.ts` (5).
+- Verified: figures match recomputed store values; clicking volume-collapse lands on the day diff
+  (`c3_volume.png`), unconcentration switches to Hotspots; URLs: `?l=traffic`,
+  `?l=traffic&tm=window&t=655`, `?d=2026-02-10&c=diff&cd=day&cv=2026-02-09`.
+- Naming: logic is `insightsData.ts` (Windows case clash with `Insights.tsx`).
+- Files: those two + `src/App.tsx` (Insights tab + applyInsightView) + `controls.css`.
+
+### 4. First-run guided walkthrough
+- `src/ui/Walkthrough.tsx`: spotlight (box-shadow cutout) + tooltip over 8 anchors in order,
+  Back/Next/Skip, arrow keys + Escape, focus managed, skips off-screen anchors. Replaces the old
+  `OrientationHint` (removed from DataNotes.tsx). Shows once (localStorage `lila.tour.done.v1`,
+  guarded), re-openable via header "Tour" button.
+- Verified: all 8 spotlights geometrically aligned to targets; titles in order; dismiss persists
+  across reload; Tour re-opens; no card overflow at 400px (`c4_step1/5.png`, `c4_mobile.png`).
+- Files: `src/ui/Walkthrough.tsx` `src/App.tsx` (steps, tour state, Tour button, data-tour anchors)
+  `src/ui/DataNotes.tsx` (removed OrientationHint) `controls.css`.
+
+### Notes
+- Scope held: only src/ui, src/map, src/App.tsx, src/ui/controls.css changed; pipeline/ and
+  src/data/ untouched. Scripts/shots in `scratchpad/spike/` (c1test, c2test, c3test, c4test, jit*).
+
+---
+
 ## 2026-09-12 - Stage 5 - Design pass (final stage)
 **Tasks:** 10.2, 10.4   **Commit:** _(pending)_   **Status:** DONE
 

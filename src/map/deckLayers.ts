@@ -20,7 +20,7 @@ import type { Layer } from 'deck.gl'
 import { MAP_BOUNDS, S } from './project'
 import { iconAtlas, tokenA } from './theme'
 import { eventStyle, GRID_SIZE } from './layers'
-import type { EventPoint, PathSegment } from './layers'
+import type { EventPoint, PathSegment, ClusterPoint } from './layers'
 
 export function heatLayer(id: string, image: HTMLCanvasElement): Layer {
   return new BitmapLayer({
@@ -79,6 +79,27 @@ export function eventLayer(id: string, points: EventPoint[], sizePx = 11): Layer
     getSize: sizePx,
     sizeUnits: 'pixels',
     getColor: (d) => tokenA(eventStyle(d.event).color, 0.92),
+    pickable: true,
+  })
+}
+
+/**
+ * Zoomed-out level of detail for a marker layer: one icon per bin, sized by count, keeping the
+ * layer's shape and colour so loot, kills and deaths stay distinguishable. Pickable, so a hover
+ * reports the bin's total. A separate count label sits above bins that hold more than one.
+ */
+export function eventClusterLayer(id: string, clusters: ClusterPoint[], basePx: number): Layer {
+  return new IconLayer<ClusterPoint>({
+    id,
+    data: clusters,
+    iconAtlas: iconAtlas().url,
+    iconMapping: iconAtlas().mapping,
+    getIcon: (d) => d.shape,
+    getPosition: (d) => d.position,
+    // Grow with count but cap, so one dense bin cannot swallow the map.
+    getSize: (d) => basePx + Math.min(20, Math.sqrt(d.count) * 3.5),
+    sizeUnits: 'pixels',
+    getColor: (d) => tokenA(eventStyle(d.event).color, 0.95),
     pickable: true,
   })
 }

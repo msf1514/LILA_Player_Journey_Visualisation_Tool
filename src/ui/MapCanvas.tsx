@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DeckGL, OrthographicView, BitmapLayer } from 'deck.gl'
 import type { Layer } from 'deck.gl'
 import { MAP_BOUNDS, FULL_BOUNDS, initialViewState, minimapUrl } from '../map/project'
@@ -34,6 +34,11 @@ export interface MapCanvasProps {
    */
   viewState?: ViewState
   onViewState?: (v: ViewState) => void
+  /**
+   * Reports the current zoom, bucketed to reduce churn, so callers can switch marker layers
+   * between clustered and individual detail. Fires only when the bucket changes, never per frame.
+   */
+  onZoom?: (zoomBucket: number) => void
 }
 
 /**
@@ -51,7 +56,7 @@ export interface MapCanvasProps {
  */
 export default function MapCanvas({
   mapId, config, layers = [], focus = FULL_BOUNDS, getTooltip,
-  viewState: externalView, onViewState,
+  viewState: externalView, onViewState, onZoom,
 }: MapCanvasProps) {
   const linked = externalView !== undefined && onViewState !== undefined
   const hostRef = useRef<HTMLDivElement>(null)
@@ -94,13 +99,37 @@ export default function MapCanvas({
   // Recreated only when the map changes, not on every pan frame.
   const view = useMemo(() => new OrthographicView({ id: 'ortho', flipY: false }), [])
 
-  const onViewStateChange = useCallback(({ viewState: next }: { viewState: ViewState }) => {
+  // Report the zoom, bucketed to half steps, so marker layers can switch between clustered and
+  // individual detail. Bucketing means this fires a handful of times across a full zoom, never
+  // on every pan frame.
+  const renderZoom = (linked ? externalView : viewState)?.zoom ?? 0
+  const bucketRef = useRef<number | null>(null)
+  useEffect(() => {
+    const bucket = Math.round(renderZoom * 2) / 2
+    if (bucket !== bucketRef.current) { bucketRef.current = bucket; onZoom?.(bucket) }
+  }, [renderZoom, onZoom])
+
+  const onViewStateChange = useCallback((
+    { viewState: next, interactionState }: {
+      viewState: ViewState
+      interactionState?: { isDragging?: boolean; isPanning?: boolean; isZooming?: boolean; isRotating?: boolean }
+    },
+  ) => {
     // Panning is continuous input. It is never eased: adding a transition here puts lag
     // between the designer's hand and the map.
     touched.current = true
     const v = { ...next, transitionDuration: 0 }
-    if (onViewState) onViewState(v)
-    else setViewState(v)
+    if (onViewState) {
+      // Linked canvases (side-by-side) share ONE view. Only the canvas the user is actively
+      // manipulating may drive it. deck.gl also fires this callback for programmatic echoes and
+      // for its own zoom-limit clamps, which carry no active interaction; when two maps with
+      // different fit limits share a view, feeding those echoes back makes them oscillate
+      // against each other's limits. So propagate user-driven changes only.
+      const s = interactionState
+      if (s && (s.isDragging || s.isPanning || s.isZooming || s.isRotating)) onViewState(v)
+    } else {
+      setViewState(v)
+    }
   }, [onViewState])
 
   const reset = useCallback(() => {

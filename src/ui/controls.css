@@ -581,27 +581,7 @@
 .dn-muted { color: var(--text-3); }
 .dn-foot { margin: var(--space-4) 0 0; font-size: var(--text-xs); color: var(--text-3); }
 
-/* First-run orientation hint: one line, shown once, points at the data notes. */
-.orient-hint {
-  position: absolute;
-  left: 50%;
-  bottom: var(--space-4);
-  transform: translateX(-50%);
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  max-width: 70ch;
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg-2);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-2);
-  font-size: var(--text-xs);
-  color: var(--text-1);
-  line-height: var(--leading-body);
-}
-.orient-dismiss { height: 24px; padding: 0 var(--space-3); font-size: var(--text-xs); flex: none; }
+
 
 /* ── Left panel stack (Layers / Hotspots tabs) ────────────────────────────────
    Both panels share one anchored column so switching tabs never shifts the map. */
@@ -773,3 +753,72 @@
 
 .dm-file-row { display: flex; align-items: center; gap: var(--space-2); }
 .dm-file-name { font-size: var(--text-xs); color: var(--text-3); }
+
+/* ── Insights panel ──────────────────────────────────────────────────────────── */
+.panel.insights {
+  overflow-y: auto;
+  padding: var(--space-3);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+.in-list { list-style: none; margin: var(--space-2) 0 0; padding: 0; display: grid; gap: var(--space-2); }
+.in-row {
+  display: grid;
+  gap: var(--space-1);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--text-1);
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: var(--leading-body);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-instant) var(--ease-out), border-color var(--dur-instant) var(--ease-out);
+}
+.in-row:hover { background: var(--bg-3); border-color: var(--accent); }
+.in-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.in-text { color: var(--text-1); }
+.in-open {
+  justify-self: start;
+  font-size: var(--text-xs);
+  color: var(--accent);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+
+/* ── Guided walkthrough ──────────────────────────────────────────────────────── */
+.wt-catch { position: fixed; inset: 0; z-index: 58; background: transparent; }
+.wt-spot {
+  position: fixed;
+  z-index: 59;
+  border: 2px solid var(--accent);
+  border-radius: var(--radius);
+  box-shadow: 0 0 0 9999px color-mix(in srgb, var(--bg-0) 74%, transparent);
+  pointer-events: none;
+  transition: top var(--dur-panel) var(--ease-out), left var(--dur-panel) var(--ease-out),
+              width var(--dur-panel) var(--ease-out), height var(--dur-panel) var(--ease-out);
+}
+.wt-card {
+  position: fixed;
+  z-index: 60;
+  max-width: calc(100vw - 24px);
+  padding: var(--space-3);
+  background: var(--bg-1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+.wt-title { margin: 0 0 var(--space-1); font-size: var(--text-md); font-weight: 600; }
+.wt-text { margin: 0 0 var(--space-3); font-size: var(--text-sm); color: var(--text-2); line-height: var(--leading-body); }
+.wt-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.wt-count { font-size: var(--text-xs); color: var(--text-3); }
+.wt-actions { display: inline-flex; gap: var(--space-2); }
+.wt-btn { height: 26px; padding: 0 var(--space-3); font-size: var(--text-xs); }
+.wt-next { background: var(--accent-weak); border-color: var(--accent); }
+
+.tour-btn { height: 24px; padding: 0 var(--space-3); font-size: var(--text-xs); }

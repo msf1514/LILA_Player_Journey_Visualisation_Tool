@@ -16,11 +16,13 @@ import type { SharedView } from './ui/MapStage'
 import { computeHotspots } from './map/hotspots'
 import Hotspots from './ui/Hotspots'
 import type { RunKey, JourneyRow, RunDetail } from './ui/Hotspots'
+import Insights from './ui/Insights'
 import LayerPanel from './ui/LayerPanel'
 import type { LayerId } from './ui/LayerPanel'
 import CopyLink from './ui/CopyLink'
-import DataNotes, { OrientationHint } from './ui/DataNotes'
+import DataNotes from './ui/DataNotes'
 import DataManager from './ui/DataManager'
+import Walkthrough, { type TourStep } from './ui/Walkthrough'
 import { useUrlState, readInitialState } from './ui/useUrlState'
 import type { ViewState } from './state/url'
 import FilterRail from './ui/FilterRail'
@@ -132,6 +134,18 @@ export default function App() {
   )
 }
 
+const TOUR_KEY = 'lila.tour.done.v1'
+const TOUR_STEPS: TourStep[] = [
+  { sel: '.app-canvas', title: 'The map', text: 'Aggregated player telemetry for the chosen map. Heat shows where people go; markers show events, and cluster when zoomed out.' },
+  { sel: '.panel-tabs', title: 'Layers', text: 'Turn data layers on and off: traffic, dwell, loot, kills, deaths, paths and more. The legend names every mark.' },
+  { sel: '.rail', title: 'Filter', text: 'Narrow to a map, a day, a single match, an actor type or event types. Active filters show as chips you can clear.' },
+  { sel: '.timeline', title: 'Timeline', text: 'Scrub or play match-elapsed time. The live-match count keeps a thinning late map from being misread as players going quiet.' },
+  { sel: '[data-tour="tab-hotspots"]', title: 'Hotspots', text: 'The densest clusters, ranked by share of traffic. Click one to see the journeys through it, then a single run.' },
+  { sel: '[aria-label="View mode"]', title: 'Compare', text: 'Put two views side by side, or show the difference in traffic share between two days, maps or actor types.' },
+  { sel: '.data-notes-btn', title: 'Data notes', text: 'What this data can and cannot show. Combat here is almost entirely against bots; read this before drawing conclusions.' },
+  { sel: '[data-tour="tab-insights"]', title: 'Insights', text: 'Findings computed from the data. Open one and it takes you to the view that proves it.' },
+]
+
 const POSITION_EVENTS = ['Position', 'BotPosition']
 const LOOT_EVENTS = new Set(['Loot'])
 const KILL_EVENTS = new Set(['BotKill', 'Kill'])
@@ -181,9 +195,22 @@ function Workspace({
 
   // Right-hand panel: layers, or the hotspot drill-down. Selection is by cluster id (its peak
   // cell), which survives a re-rank; the run is one actor in one match.
-  const [rightTab, setRightTab] = useState<'layers' | 'hotspots'>('layers')
+  const [rightTab, setRightTab] = useState<'layers' | 'hotspots' | 'insights'>('layers')
   const [selectedClusterId, setSelectedClusterId] = useState<number | null>(null)
   const [selectedRun, setSelectedRun] = useState<RunKey | null>(null)
+  // Current zoom bucket (from the map canvas), so markers cluster when zoomed out and resolve to
+  // individuals when zoomed in. Seeded below fit so the first paint is clustered.
+  const [zoomBucket, setZoomBucket] = useState(-1)
+
+  // First-run guided tour. Shows once, remembered in localStorage (guarded), re-openable.
+  const [tourOpen, setTourOpen] = useState(false)
+  useEffect(() => {
+    try { if (localStorage.getItem(TOUR_KEY) !== '1') setTourOpen(true) } catch { /* storage blocked: no tour */ }
+  }, [])
+  const closeTour = () => {
+    setTourOpen(false)
+    try { localStorage.setItem(TOUR_KEY, '1') } catch { /* best effort */ }
+  }
 
   // Fall back to the first map if the selected one is gone: removing added data can drop the
   // map the view was on, and reading a config for a map that no longer exists would crash.
@@ -557,6 +584,14 @@ function Workspace({
 
   useUrlState(viewState, store, applyFromHistory)
 
+  /** Open the view an insight demonstrates, then show the result in the right panel. */
+  const applyInsightView = (view: ViewState, tab: 'layers' | 'hotspots') => {
+    applyFromHistory(view, [])
+    setSelectedClusterId(null)
+    setSelectedRun(null)
+    setRightTab(tab)
+  }
+
   const counts: Partial<Record<LayerId, number>> = {
     loot: loot.length, kills: kills.length, deaths: deaths.length,
     paths: paths.length, actors: actors.length, dead: coverage?.dead.length,
@@ -587,6 +622,14 @@ function Workspace({
           onClearTime={clearTime}
         />
         <span className="header-right">
+          <button
+            type="button"
+            className="map-control tour-btn"
+            onClick={() => setTourOpen(true)}
+            title="Take the tour"
+          >
+            Tour
+          </button>
           <DataManager
             store={store}
             addedRows={added.rows.length}
@@ -632,6 +675,8 @@ function Workspace({
             selectedClusterId={selectedClusterId}
             runPath={runPath}
             onSelectCluster={selectCluster}
+            zoomBucket={zoomBucket}
+            onZoom={setZoomBucket}
           />
         </Suspense>
         {compareMode === 'single' && (
@@ -645,14 +690,21 @@ function Workspace({
               </button>
               <button
                 type="button" role="tab" aria-selected={rightTab === 'hotspots'}
+                data-tour="tab-hotspots"
                 className="panel-tab" onClick={() => setRightTab('hotspots')}
               >
                 Hotspots
               </button>
+              <button
+                type="button" role="tab" aria-selected={rightTab === 'insights'}
+                data-tour="tab-insights"
+                className="panel-tab" onClick={() => setRightTab('insights')}
+              >
+                Insights
+              </button>
             </div>
-            {rightTab === 'layers' ? (
-              <LayerPanel active={active} onToggle={toggle} counts={counts} />
-            ) : (
+            {rightTab === 'layers' && <LayerPanel active={active} onToggle={toggle} counts={counts} />}
+            {rightTab === 'hotspots' && (
               <Hotspots
                 store={store}
                 hotspots={hotspots}
@@ -664,6 +716,7 @@ function Workspace({
                 onSelectRun={setSelectedRun}
               />
             )}
+            {rightTab === 'insights' && <Insights store={store} onApply={applyInsightView} />}
           </div>
         )}
         {compareMode === 'diff' && (
@@ -679,7 +732,6 @@ function Workspace({
         {compareMode === 'side' && !comparing && (
           <div className="diff-note" role="status">Choose something to compare against, and the second map appears here.</div>
         )}
-        <OrientationHint />
         {dropped.length > 0 && (
           <div className="link-note" role="status">
             <span>
@@ -720,6 +772,8 @@ function Workspace({
         coverage={coverage}
         filtered={isFiltered(effective)}
       />
+
+      <Walkthrough steps={TOUR_STEPS} open={tourOpen} onClose={closeTour} />
     </div>
   )
 }
@@ -820,6 +874,13 @@ function tooltip({ object }: { object?: unknown }) {
   if (o && o.count !== undefined && o.rank !== undefined) {
     return {
       text: `Cluster ${o.rank}\n${o.count.toLocaleString()} players through this cell`,
+      style: tooltipStyle,
+    }
+  }
+  // Marker cluster (zoomed out): report the bin's total for that event type.
+  if (o && o.count !== undefined && o.event) {
+    return {
+      text: `${o.count.toLocaleString()} × ${eventStyle(o.event).label}${o.count > 1 ? ' (zoom in for detail)' : ''}`,
       style: tooltipStyle,
     }
   }

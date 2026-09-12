@@ -264,6 +264,44 @@ export function collectEvents(
   return out
 }
 
+/**
+ * A bin of nearby markers of one layer, for the zoomed-out level of detail.
+ *
+ * At fit, thousands of loot squares or kill crosses overplot into an unreadable mass. Binning
+ * them into grid cells and drawing one mark per cell (sized and labelled by count) restores the
+ * shape of the distribution. The cell is measured in render-space units; the caller sizes it
+ * from the current zoom so a cluster occupies a roughly constant number of screen pixels.
+ */
+export interface ClusterPoint {
+  position: [number, number]
+  count: number
+  event: string
+  shape: ShapeName
+}
+
+/**
+ * Bin event points into square cells of `cellWorld` render-space units. Each layer is clustered
+ * on its own array, so a loot bin and a kill bin never merge into one ambiguous dot. The mark
+ * sits at the mean of its members, not the cell centre, so it lands where the events actually are.
+ */
+export function clusterEvents(points: EventPoint[], cellWorld: number): ClusterPoint[] {
+  if (cellWorld <= 0 || points.length === 0) return []
+  const cells = new Map<string, { sx: number; sy: number; count: number; event: string; shape: ShapeName }>()
+  for (const p of points) {
+    const cx = Math.floor(p.position[0] / cellWorld)
+    const cy = Math.floor(p.position[1] / cellWorld)
+    const key = `${cx},${cy}`
+    let c = cells.get(key)
+    if (!c) { c = { sx: 0, sy: 0, count: 0, event: p.event, shape: p.shape }; cells.set(key, c) }
+    c.sx += p.position[0]
+    c.sy += p.position[1]
+    c.count++
+  }
+  const out: ClusterPoint[] = []
+  for (const c of cells.values()) out.push({ position: [c.sx / c.count, c.sy / c.count], count: c.count, event: c.event, shape: c.shape })
+  return out
+}
+
 // ─── Journeys ───────────────────────────────────────────────────────────────
 
 export interface PathSegment {
