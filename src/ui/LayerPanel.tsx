@@ -42,8 +42,7 @@ export default function LayerPanel({ active, onToggle, counts }: Props) {
     <aside
       aria-label="Layers"
       style={{
-        position: 'absolute', top: 'var(--space-3)', left: 'var(--space-3)',
-        width: 214, background: 'var(--bg-1)', border: '1px solid var(--line)',
+        width: '100%', background: 'var(--bg-1)', border: '1px solid var(--line)',
         borderRadius: 'var(--radius)', boxShadow: 'var(--shadow-2)', overflow: 'hidden',
       }}
     >

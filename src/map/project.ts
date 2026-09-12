@@ -88,8 +88,21 @@ export function isInBounds(u: number, v: number): boolean {
 /** The square the map occupies in render space: [left, bottom, right, top]. */
 export const MAP_BOUNDS: [number, number, number, number] = [0, 0, S, S]
 
-/** URL of the shipped minimap for a map id. */
+/**
+ * Minimaps registered at runtime (maps added through the UI), keyed by map id. A map added
+ * without a redeploy has no file under /minimaps, so its uploaded image is held here as a data
+ * URL and taken ahead of the shipped path.
+ */
+const runtimeMinimaps = new Map<string, string>()
+
+export function registerMinimap(mapId: string, dataUrl: string): void {
+  runtimeMinimaps.set(mapId, dataUrl)
+}
+
+/** URL of the minimap for a map id: a runtime-registered image if present, else the shipped file. */
 export function minimapUrl(mapId: string, base = import.meta.env.BASE_URL ?? '/'): string {
+  const runtime = runtimeMinimaps.get(mapId)
+  if (runtime) return runtime
   const root = base.endsWith('/') ? base : `${base}/`
   return `${root}minimaps/${mapId}.webp`
 }

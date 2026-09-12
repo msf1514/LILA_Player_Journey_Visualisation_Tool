@@ -1,19 +1,26 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { loadBundle, maskReader } from './data/loader'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { loadBundle, maskReader, type Bundle } from './data/loader'
 import { Store } from './data/store'
 import { filterRows, aggregate, deadSpace, diffGrids } from './data/query'
-import type { Filter } from './data/types'
-import { worldToUV, uvToWorldSpace, padBounds } from './map/project'
+import type { Filter, MapConfig } from './data/types'
+import { buildMergedBundle } from './data/merge'
+import { loadPersisted, savePersisted, clearPersisted, type PersistedData, type AddedMap } from './data/persist'
+import type { IngestResult } from './data/ingest'
+import { worldToUV, uvToWorldSpace, padBounds, registerMinimap } from './map/project'
 import type { UVBounds } from './map/project'
 import {
-  GRID_SIZE, heatPoints, trafficImage, dwellImage, heatLayer, deadSpaceLayer,
-  collectEvents, eventLayer, buildPaths, pathLayer, actorLayer, eventStyle,
-  diffImage, diffLayer,
+  GRID_SIZE, heatPoints, trafficImage, dwellImage,
+  collectEvents, buildPaths, eventStyle, diffImage,
 } from './map/layers'
-import MapCanvas from './ui/MapCanvas'
+import type { SharedView } from './ui/MapStage'
+import { computeHotspots } from './map/hotspots'
+import Hotspots from './ui/Hotspots'
+import type { RunKey, JourneyRow, RunDetail } from './ui/Hotspots'
 import LayerPanel from './ui/LayerPanel'
 import type { LayerId } from './ui/LayerPanel'
 import CopyLink from './ui/CopyLink'
+import DataNotes, { OrientationHint } from './ui/DataNotes'
+import DataManager from './ui/DataManager'
 import { useUrlState, readInitialState } from './ui/useUrlState'
 import type { ViewState } from './state/url'
 import FilterRail from './ui/FilterRail'
@@ -24,36 +31,86 @@ import Timeline, { STORM_FLOOR_S, WINDOW_S, mmss } from './ui/Timeline'
 import type { TimeMode } from './ui/Timeline'
 import { usePlayback, useThrottled } from './ui/usePlayback'
 
-type State =
-  | { status: 'loading' }
-  | { status: 'error'; message: string }
-  | { status: 'ready'; store: Store }
+/**
+ * The renderer (deck.gl) and the data bundle are both started the instant this module runs,
+ * before React has mounted, so the two large downloads overlap instead of serialising.
+ *
+ *   - `bundlePromise` fetches meta.json + bundle.bin (~2.1 MB) at once.
+ *   - `warmMapStage()` pulls the code-split deck.gl chunk (~1 MB) alongside it.
+ *
+ * By the time the data resolves the renderer chunk is usually already resident, so the map
+ * appears without a second wait. The shell paints first from a small initial chunk that has
+ * no deck.gl in it at all.
+ */
+const loadMapStage = () => import('./ui/MapStage')
+const MapStage = lazy(loadMapStage)
+const bundlePromise = loadBundle()
+loadMapStage()
 
 export default function App() {
-  const [state, setState] = useState<State>({ status: 'loading' })
+  const [base, setBase] = useState<Bundle | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [added, setAdded] = useState<PersistedData>({ rows: [], maps: [] })
 
   useEffect(() => {
     let cancelled = false
-    loadBundle()
-      .then((bundle) => { if (!cancelled) setState({ status: 'ready', store: new Store(bundle) }) })
+    Promise.all([bundlePromise, loadPersisted()])
+      .then(([bundle, persisted]) => {
+        if (cancelled) return
+        for (const m of persisted.maps) registerMinimap(m.id, m.minimap)
+        setBase(bundle)
+        setAdded(persisted)
+      })
       .catch((err: unknown) => {
-        if (!cancelled) {
-          setState({ status: 'error', message: err instanceof Error ? err.message : String(err) })
-        }
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
       })
     return () => { cancelled = true }
   }, [])
 
-  if (state.status === 'loading') {
-    return <Centered><p style={{ margin: 0 }}>Loading telemetry</p></Centered>
+  // The store the whole app runs on: base telemetry with any dropped data merged in.
+  const store = useMemo(() => {
+    if (!base) return null
+    const mapConfig: Record<string, MapConfig> = {}
+    for (const m of added.maps) mapConfig[m.id] = m.config
+    const { bundle } = buildMergedBundle(base, { rows: added.rows, mapConfig })
+    return new Store(bundle)
+  }, [base, added])
+
+  const onIngest = (result: IngestResult) => {
+    if (!base) return
+    setAdded((prev) => {
+      // Only persist rows for genuinely new matches; re-dropping shipped or already-added data
+      // is a no-op at merge time, so keeping those rows would just bloat storage.
+      const known = new Set(base.meta.dict.matches)
+      for (const r of prev.rows) known.add(r.matchId)
+      const fresh = result.rows.filter((r) => !known.has(r.matchId))
+      if (!fresh.length) return prev
+      const next: PersistedData = { rows: [...prev.rows, ...fresh], maps: prev.maps }
+      void savePersisted(next)
+      return next
+    })
   }
 
-  if (state.status === 'error') {
+  const onAddMap = (map: AddedMap) => {
+    registerMinimap(map.id, map.minimap)
+    setAdded((prev) => {
+      const next: PersistedData = { rows: prev.rows, maps: [...prev.maps.filter((m) => m.id !== map.id), map] }
+      void savePersisted(next)
+      return next
+    })
+  }
+
+  const onClearData = () => {
+    void clearPersisted()
+    setAdded({ rows: [], maps: [] })
+  }
+
+  if (error) {
     return (
       <Centered>
         <p style={{ margin: 0, color: 'var(--ev-kill)' }}>Telemetry failed to load.</p>
         <p className="num" style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--text-3)' }}>
-          {state.message}
+          {error}
         </p>
         <p style={{ margin: 0, color: 'var(--text-2)', fontSize: 'var(--text-sm)' }}>
           Run <code style={{ fontFamily: 'var(--font-mono)' }}>npm run build:data</code> to regenerate the bundle.
@@ -62,7 +119,17 @@ export default function App() {
     )
   }
 
-  return <Workspace store={state.store} />
+  if (!store) return <AppSkeleton />
+
+  return (
+    <Workspace
+      store={store}
+      added={added}
+      onIngest={onIngest}
+      onAddMap={onAddMap}
+      onClearData={onClearData}
+    />
+  )
 }
 
 const POSITION_EVENTS = ['Position', 'BotPosition']
@@ -70,7 +137,17 @@ const LOOT_EVENTS = new Set(['Loot'])
 const KILL_EVENTS = new Set(['BotKill', 'Kill'])
 const DEATH_EVENTS = new Set(['BotKilled', 'Killed', 'KilledByStorm'])
 
-function Workspace({ store }: { store: Store }) {
+function Workspace({
+  store, added, onIngest, onAddMap, onClearData,
+}: {
+  store: Store
+  added: PersistedData
+  onIngest: (r: IngestResult) => void
+  onAddMap: (m: AddedMap) => void
+  onClearData: () => void
+}) {
+  // File names already loaded, so re-dropping the same file is skipped by the parser.
+  const existingFileNames = useMemo(() => new Set(added.rows.map((r) => r.file)), [added.rows])
   const maps = store.meta.dict.maps
 
   /**
@@ -102,8 +179,22 @@ function Workspace({ store }: { store: Store }) {
   /** Anything the current data could not honour from the link, reported once. */
   const [dropped, setDropped] = useState<string[]>(initial.dropped)
 
-  const mapId = filter.map ?? maps[0]
+  // Right-hand panel: layers, or the hotspot drill-down. Selection is by cluster id (its peak
+  // cell), which survives a re-rank; the run is one actor in one match.
+  const [rightTab, setRightTab] = useState<'layers' | 'hotspots'>('layers')
+  const [selectedClusterId, setSelectedClusterId] = useState<number | null>(null)
+  const [selectedRun, setSelectedRun] = useState<RunKey | null>(null)
+
+  // Fall back to the first map if the selected one is gone: removing added data can drop the
+  // map the view was on, and reading a config for a map that no longer exists would crash.
+  const mapId = filter.map && maps.includes(filter.map) ? filter.map : maps[0]
   const config = store.meta.mapConfig[mapId]
+
+  // Self-heal a filter left pointing at a map that no longer exists (added data was removed),
+  // so the switcher, chips and URL all settle back onto a real map.
+  useEffect(() => {
+    if (filter.map && !maps.includes(filter.map)) setFilter((f) => ({ ...f, map: maps[0] }))
+  }, [filter.map, maps])
 
   /**
    * Axis length. Clamps to the chosen match's own duration when exactly one is selected, so
@@ -277,6 +368,90 @@ function Workspace({ store }: { store: Store }) {
     return out
   }, [store, positionRows, config])
 
+  // ── Hotspots ─────────────────────────────────────────────────────────────
+  // The traffic grid that the heat map already uses, ranked into clusters. It follows the
+  // current filter, so hotspots are of what is on screen, not of the whole dataset.
+  const trafficGrid = useMemo(
+    () => aggregate(store, positionRows, GRID_SIZE, 'traffic'),
+    [store, positionRows],
+  )
+  const hotspots = useMemo(() => computeHotspots(trafficGrid), [trafficGrid])
+  const hotspotMode = rightTab === 'hotspots' && compareMode === 'single'
+
+  const selectedCluster = useMemo(
+    () => hotspots.clusters.find((c) => c.id === selectedClusterId) ?? null,
+    [hotspots, selectedClusterId],
+  )
+
+  // A selection made against one view can be meaningless in another (different map, or the
+  // cluster no longer exists after a filter change). Drop it rather than point at nothing.
+  useEffect(() => {
+    if (selectedClusterId !== null && !hotspots.clusters.some((c) => c.id === selectedClusterId)) {
+      setSelectedClusterId(null)
+      setSelectedRun(null)
+    }
+  }, [hotspots, selectedClusterId])
+
+  /** Journeys that passed through the selected cluster, most-present first. */
+  const journeys = useMemo<JourneyRow[] | null>(() => {
+    if (!selectedCluster) return null
+    const cellSet = new Set(selectedCluster.cells)
+    const counts = new Map<number, number>()
+    const { x, z, userIdx, matchIdx } = store.cols
+    for (const r of positionRows) {
+      const { u, v } = worldToUV(x[r], z[r], config)
+      if (u < 0 || u > 1 || v < 0 || v > 1) continue
+      const col = Math.min(GRID_SIZE - 1, (u * GRID_SIZE) | 0)
+      const row = Math.min(GRID_SIZE - 1, ((1 - v) * GRID_SIZE) | 0)
+      if (!cellSet.has(row * GRID_SIZE + col)) continue
+      const key = matchIdx[r] * 65536 + userIdx[r]
+      counts.set(key, (counts.get(key) ?? 0) + 1)
+    }
+    const out: JourneyRow[] = []
+    for (const [key, samples] of counts) {
+      const u = key % 65536
+      out.push({ userIdx: u, matchIdx: (key - u) / 65536, bot: store.isBotUser[u], samplesInCluster: samples })
+    }
+    out.sort((a, b) => b.samplesInCluster - a.samplesInCluster)
+    return out
+  }, [selectedCluster, store, positionRows, config])
+
+  /** The one selected run, drawn as a bright path over everything else. Whole route, not clipped. */
+  const runPath = useMemo(() => {
+    if (!selectedRun) return null
+    return buildPaths(store, config, mapIdx, (u, m) => u === selectedRun.userIdx && m === selectedRun.matchIdx)
+  }, [selectedRun, store, config, mapIdx])
+
+  const runDetail = useMemo<RunDetail | null>(() => {
+    if (!selectedRun) return null
+    const j = store.journeys.find(
+      (jr) => jr.userIdx === selectedRun.userIdx && jr.matchIdx === selectedRun.matchIdx && jr.mapIdx === mapIdx,
+    )
+    if (!j) return null
+    let loot = 0, kills = 0, deaths = 0, positions = 0
+    for (let i = j.start; i < j.end; i++) {
+      const name = store.eventName(store.cols.evIdx[i])
+      if (name === 'Loot') loot++
+      else if (name === 'BotKill' || name === 'Kill') kills++
+      else if (name === 'BotKilled' || name === 'Killed' || name === 'KilledByStorm') deaths++
+      else if (name === 'Position' || name === 'BotPosition') positions++
+    }
+    const m = store.matchMeta(selectedRun.matchIdx)
+    return {
+      bot: store.isBotUser[selectedRun.userIdx],
+      matchIdShort: store.matchId(selectedRun.matchIdx).slice(0, 8),
+      date: m.date,
+      durationS: m.duration,
+      loot, kills, deaths, positions,
+    }
+  }, [selectedRun, store, mapIdx])
+
+  const selectCluster = (id: number | null) => {
+    setRightTab('hotspots')
+    setSelectedClusterId(id)
+    setSelectedRun(null)
+  }
+
   /**
    * Framing follows the map, never the filter. If the view re-fitted on every filter change
    * the map would jump under the designer's hands, and two filtered views would be
@@ -346,43 +521,9 @@ function Workspace({ store }: { store: Store }) {
   /** Side-by-side needs one shared view state, or the two maps cannot be compared. */
   const [sharedView, setSharedView] = useState<SharedView | undefined>(undefined)
 
-  const layersB = useMemo(() => {
-    if (compareMode !== 'side' || !rowsB || !filterB) return []
-    const posB = filterRows(store, { ...filterB, events: intersectEvents(filter.events, POSITION_EVENTS) })
-    const out = []
-    if (active.has('traffic')) out.push(heatLayer('traffic-b', trafficImage(heatPoints(store, posB, config, 'traffic'))))
-    if (active.has('loot')) out.push(eventLayer('loot-b', collectEvents(store, rowsB, config, LOOT_EVENTS), 9))
-    if (active.has('kills')) out.push(eventLayer('kills-b', collectEvents(store, rowsB, config, KILL_EVENTS), 12))
-    if (active.has('deaths')) out.push(eventLayer('deaths-b', collectEvents(store, rowsB, config, DEATH_EVENTS), 13))
-    return out
-  }, [compareMode, store, rowsB, filterB, config, active, filter.events])
-
-  // Layers are built fresh every render on purpose. deck.gl layers are single-use
-  // descriptors: reusing an instance breaks the lifecycle and it stops drawing, silently.
-  // The expensive inputs above are memoised instead.
-  const layers = useMemo(() => {
-    const out = []
-
-    /**
-     * Difference mode draws the delta and NOTHING else.
-     *
-     * Every other layer is built from side A alone, so overlaying them on an A-versus-B delta
-     * mixes two incompatible things in one picture. A designer seeing side A's loot markers
-     * sitting on top of the comparison would reasonably take them as part of it, and conclude
-     * that loot moved when all they are looking at is where loot was on one of the two days.
-     */
-    if (diff) { out.push(diffLayer(diff.canvas)); return out }
-
-    if (trafficImg) out.push(heatLayer('traffic', trafficImg))
-    if (dwellImg) out.push(heatLayer('dwell', dwellImg))
-    if (active.has('dead') && coverage) out.push(deadSpaceLayer(coverage.dead, coverage.size))
-    if (active.has('paths')) out.push(pathLayer(paths))
-    if (active.has('actors')) out.push(actorLayer(actors))
-    if (active.has('loot')) out.push(eventLayer('loot', loot, 9))
-    if (active.has('kills')) out.push(eventLayer('kills', kills, 12))
-    if (active.has('deaths')) out.push(eventLayer('deaths', deaths, 13))
-    return out
-  }, [active, trafficImg, dwellImg, coverage, paths, actors, loot, kills, deaths, diff])
+  // The deck.gl layer arrays are built inside MapStage, the code-split renderer. App produces
+  // only the deck.gl-free inputs above (baked textures, positioned geometry, event points) and
+  // hands them across, so nothing in the load path imports deck.gl.
 
   /**
    * The shareable view, assembled from the pieces above.
@@ -445,31 +586,86 @@ function Workspace({ store }: { store: Store }) {
           timeLabel={timeActive ? timeChipLabel(mode, appliedT) : null}
           onClearTime={clearTime}
         />
+        <span className="header-right">
+          <DataManager
+            store={store}
+            addedRows={added.rows.length}
+            addedMaps={added.maps}
+            existingFileNames={existingFileNames}
+            onIngest={onIngest}
+            onAddMap={onAddMap}
+            onClear={onClearData}
+          />
+          <DataNotes store={store} />
+        </span>
       </header>
 
       <FilterRail store={store} filter={filter} onChange={setFilter} eventCounts={eventCounts} />
 
-      <div className={compareMode === 'side' ? 'app-canvas app-canvas-split' : 'app-canvas'}>
-        <MapCanvas
-          mapId={mapId}
-          config={config}
-          layers={layers}
-          focus={focus}
-          getTooltip={tooltip}
-          viewState={compareMode === 'side' ? sharedView : undefined}
-          onViewState={compareMode === 'side' ? setSharedView : undefined}
-        />
-        {compareMode === 'side' && filterB && (
-          <MapCanvas
-            mapId={filterB.map ?? mapId}
-            config={store.meta.mapConfig[filterB.map ?? mapId]}
-            layers={layersB}
+      <div className={compareMode === 'side' && comparing ? 'app-canvas app-canvas-split' : 'app-canvas'}>
+        <Suspense fallback={<MapAreaSkeleton split={compareMode === 'side' && comparing} />}>
+          <MapStage
+            mapId={mapId}
+            config={config}
             focus={focus}
-            viewState={sharedView}
-            onViewState={setSharedView}
+            active={active}
+            trafficImg={trafficImg}
+            dwellImg={dwellImg}
+            coverage={coverage}
+            paths={paths}
+            actors={actors}
+            loot={loot}
+            kills={kills}
+            deaths={deaths}
+            diffCanvas={diff ? diff.canvas : null}
+            getTooltip={tooltip}
+            compareMode={compareMode}
+            store={store}
+            rowsB={rowsB}
+            filterB={filterB}
+            eventsFilter={filter.events}
+            sharedView={sharedView}
+            setSharedView={setSharedView}
+            hotspotMode={hotspotMode}
+            clusters={hotspots.clusters}
+            gridValues={trafficGrid.values}
+            selectedClusterId={selectedClusterId}
+            runPath={runPath}
+            onSelectCluster={selectCluster}
           />
+        </Suspense>
+        {compareMode === 'single' && (
+          <div className="left-stack">
+            <div role="tablist" aria-label="Panel" className="panel-tabs">
+              <button
+                type="button" role="tab" aria-selected={rightTab === 'layers'}
+                className="panel-tab" onClick={() => setRightTab('layers')}
+              >
+                Layers
+              </button>
+              <button
+                type="button" role="tab" aria-selected={rightTab === 'hotspots'}
+                className="panel-tab" onClick={() => setRightTab('hotspots')}
+              >
+                Hotspots
+              </button>
+            </div>
+            {rightTab === 'layers' ? (
+              <LayerPanel active={active} onToggle={toggle} counts={counts} />
+            ) : (
+              <Hotspots
+                store={store}
+                hotspots={hotspots}
+                selectedCluster={selectedCluster}
+                journeys={journeys}
+                selectedRun={selectedRun}
+                runDetail={runDetail}
+                onSelectCluster={selectCluster}
+                onSelectRun={setSelectedRun}
+              />
+            )}
+          </div>
         )}
-        {compareMode === 'single' && <LayerPanel active={active} onToggle={toggle} counts={counts} />}
         {compareMode === 'diff' && (
           <div className="layer-note" role="note">
             Difference mode shows the change in traffic share only. Layers come from one side
@@ -480,6 +676,10 @@ function Workspace({ store }: { store: Store }) {
           <EmptyState filter={effective} store={store} onChange={setFilter} onClearTime={clearTime} />
         )}
         {compareMode === 'diff' && <DiffNote comparing={comparing} diff={diff} />}
+        {compareMode === 'side' && !comparing && (
+          <div className="diff-note" role="status">Choose something to compare against, and the second map appears here.</div>
+        )}
+        <OrientationHint />
         {dropped.length > 0 && (
           <div className="link-note" role="status">
             <span>
@@ -559,7 +759,7 @@ function EmptyState({
     <div className="empty-state" role="status">
       <div>
         <p>
-          No events on {store.meta.mapConfig[filter.map ?? store.meta.dict.maps[0]].label}
+          No events on {store.meta.mapConfig[filter.map ?? store.meta.dict.maps[0]]?.label ?? 'this map'}
           {culprits.length > 0 && <> with {culprits.map((c) => c.label).join(' and ')}</>}.
         </p>
         <div style={{ display: 'flex', gap: 'var(--space-2)', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -588,15 +788,6 @@ function EmptyState({
   )
 }
 
-/** deck.gl view state, mirrored here so two canvases can share one. */
-interface SharedView {
-  target: [number, number, number]
-  zoom: number
-  minZoom?: number
-  maxZoom?: number
-  transitionDuration?: number
-}
-
 /**
  * Says why a difference cannot be drawn, instead of rendering an empty map.
  *
@@ -617,19 +808,28 @@ function DiffNote({ comparing, diff }: { comparing: boolean; diff: { stats: { sh
   return <div className="diff-note" role="status">{text}</div>
 }
 
+const tooltipStyle = {
+  background: 'var(--bg-2)', color: 'var(--text-1)',
+  border: '1px solid var(--line-strong)', borderRadius: '4px',
+  fontSize: '12px', fontFamily: 'var(--font-sans)', padding: '6px 8px',
+}
+
 function tooltip({ object }: { object?: unknown }) {
-  const o = object as { event?: string; bot?: boolean; elapsed?: number } | undefined
+  const o = object as { event?: string; bot?: boolean; elapsed?: number; count?: number; rank?: number } | undefined
+  // Hotspot cell: report that cell's own traffic, the number the ranking is built from.
+  if (o && o.count !== undefined && o.rank !== undefined) {
+    return {
+      text: `Cluster ${o.rank}\n${o.count.toLocaleString()} players through this cell`,
+      style: tooltipStyle,
+    }
+  }
   if (!o?.event) return null
   const s = eventStyle(o.event)
   const e = o.elapsed ?? 0
   const mmss = `${String(Math.floor(e / 60)).padStart(2, '0')}:${String(e % 60).padStart(2, '0')}`
   return {
     text: `${s.label}\n${o.bot ? 'Bot' : 'Human'} · ${mmss} into the match`,
-    style: {
-      background: 'var(--bg-2)', color: 'var(--text-1)',
-      border: '1px solid var(--line-strong)', borderRadius: '4px',
-      fontSize: '12px', fontFamily: 'var(--font-sans)', padding: '6px 8px',
-    },
+    style: tooltipStyle,
   }
 }
 
@@ -666,6 +866,62 @@ function StatStrip({
       )}
     </div>
   )
+}
+
+/**
+ * Full-layout skeleton, shown while the data bundle downloads.
+ *
+ * It reuses the real `.app` grid so the header, rail, map, timeline and stat strip land in
+ * exactly the positions they will occupy once the data arrives. That is the point of a
+ * skeleton over a spinner: the reader sees the shape of the tool filling in, and nothing
+ * jumps when the real content replaces it. The map area carries its own status text, since
+ * it is the one region that stays a placeholder longest.
+ */
+function AppSkeleton() {
+  return (
+    <div className="app app-skeleton" role="status" aria-busy="true" aria-label="Loading telemetry">
+      <div className="app-header">
+        <h1 className="app-title">LILA BLACK</h1>
+        <span className="sk sk-pill" style={{ width: 96 }} />
+        <span className="sk sk-pill" style={{ width: 132 }} />
+        <span className="sk sk-pill" style={{ width: 180 }} />
+      </div>
+      <div className="rail sk-rail">
+        {[64, 120, 220, 96].map((h, i) => (
+          <div className="sk-rail-section" key={i}>
+            <span className="sk sk-line" style={{ width: 90 }} />
+            <span className="sk sk-block" style={{ height: h }} />
+          </div>
+        ))}
+      </div>
+      <div className="app-canvas">
+        <MapAreaSkeleton />
+      </div>
+      <div className="timeline">
+        <span className="sk sk-block" style={{ width: 28, height: 28 }} />
+        <span className="sk sk-block" style={{ height: 8 }} />
+      </div>
+      <div className="stat-strip">
+        {[60, 90, 70, 110, 80, 90].map((w, i) => (
+          <span className="sk sk-line" key={i} style={{ width: w }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * The map area on its own, used both inside the full skeleton and as the Suspense fallback
+ * while the renderer chunk loads. The two overlap in time, so in practice this rarely shows
+ * on its own; when it does it says what is happening rather than spinning silently.
+ */
+function MapAreaSkeleton({ split = false }: { split?: boolean }) {
+  const panel = (
+    <div className="sk-map" role="status" aria-busy="true">
+      <span className="sk-map-text">Preparing the map</span>
+    </div>
+  )
+  return split ? <>{panel}{panel}</> : panel
 }
 
 function Centered({ children }: { children: React.ReactNode }) {

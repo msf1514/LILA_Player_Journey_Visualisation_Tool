@@ -133,12 +133,12 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 8.1 | Hotspot ranking (default panel) | L | Threshold the density grid → connected components → rank. Each row: traffic % · kills · loot % · first-seen time. **The tool arrives with an opinion** instead of a blank map. | `TODO` |
-| 8.2 | Zone detail on click | M | Fly to zone, scope filters to it, show its stats. | `TODO` |
-| 8.3 | Drill to individual runs | M | Zone → the runs that made it hot → one player's journey → that moment on the timeline. **Aggregate → individual in two clicks.** This is what makes it an instrument, not a poster. | `TODO` |
-| 8.4 | Run detail card | S | Duration, distance, loot count, kills, deaths, human/bot, map, date. | `TODO` |
-| 8.5 | Hover tooltip | S | Cell stats on hover: traffic, dwell, events. | `TODO` |
-| 8.6 | Zone naming (nice-to-have) | S | Let a designer name a zone; persist in URL/localStorage. **First to cut.** | `TODO` |
+| 8.1 | Hotspot ranking (default panel) | L | ✅ `src/map/hotspots.ts`: threshold traffic grid at the **90th percentile** of non-empty cells → 4-connected components → rank CLUSTERS by summed share. Min 2 cells, cap 8. Deliberately NOT the 80th percentile, which merges the centre into one 13% blob (the failure signal). Live tops: Ambrose 4.1% (18 total), Lockdown 3.8% (16), Grand Rift 7.1% (10) — none dominant. Each row shows share + cell count. | `DONE` |
+| 8.2 | Zone detail on click | M | ✅ Click a cluster (list row or map footprint) → selected footprint highlighted, its journeys listed. Share/cells/peak shown. | `DONE` |
+| 8.3 | Drill to individual runs | M | ✅ Cluster → journeys through it → click one → that single run's path drawn bright on the map. **Two clicks, aggregate → individual** (verified live). | `DONE` |
+| 8.4 | Run detail card | S | ✅ Human/bot, match id, date, match length, position samples, loot, kills (vs bots), deaths. (Distance omitted — not derivable cleanly with the 518s sampling gaps.) | `DONE` |
+| 8.5 | Hover tooltip | S | ✅ Hovering a hotspot cell shows its real traffic count and cluster (verified: 'Cluster 5 · 41 players through this cell'). | `DONE` |
+| 8.6 | Zone naming (nice-to-have) | S | Cut, as planned — clusters are numbered by rank; naming adds no analytical value for the test. | `CUT` |
 
 ---
 
@@ -156,11 +156,11 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 10.1 | **Data honesty banner** | S | Visible counts including the uncomfortable ones: **3 PvP events · 39 storm deaths · 779/780 matches have 1 human.** Never hide the gaps. | `TODO` |
-| 10.2 | Empty / loading / error states | M | "No data for this filter" with a reset action. Skeleton on load. Graceful parse-failure message. | `TODO` |
-| 10.3 | Onboarding hint | S | First-open tooltip: what am I looking at, what should I click. Designers, not data scientists. | `TODO` |
+| 10.1 | **Data honesty banner** | S | ✅ `DataNotes` panel from a permanent header button. All 10 figures read from `meta.stats`/`matchMeta` (3 PvP · 2,410 vs bots · 39 storm · 779/780 solo-human · 53/796 multi-journey · 12,866 loot · 1/1,243 dup · 3 ambiguous · 0 OOB). Lead states the PvP caveat in words. Reads as a caveat, not a boast (screenshot). | `DONE` |
+| 10.2 | Empty / loading / error states | M | ✅ Empty state names the culprit filters with clear actions; full-layout skeleton on load (Stage 1); graceful bundle-failure and per-file import-failure messages. | `DONE` |
+| 10.3 | Onboarding hint | S | ✅ `OrientationHint`: one line (what this is, what to click, the bot-combat caveat), dismissible, remembered in localStorage (guarded). Verified it stays gone after reload. | `DONE` |
 | 10.0 | **Design foundation** (tokens: type + colour + motion) | M | ✅ `src/design/tokens.css`. IBM Plex Sans/Mono self-hosted; Okabe-Ito colour-blind-safe data palette; chrome/data colour systems kept separate; motion budget capped at 220ms. | `DONE` |
-| 10.4 | Visual design pass | L | Dark theme (matches game tooling). Consistent spacing, type scale, restrained colour so the *map* is the loudest thing on screen. | `TODO` |
+| 10.4 | Visual design pass | L | ✅ Reviewed all major states together at 1440x900 (default, hotspots, filtered, difference, side-by-side, data notes, data manager). Fixed the side-by-side empty half (split only once a comparison exists; prompt otherwise) and the raw native file input in Add-a-map. Token-only. Map remains the loudest element. | `DONE` |
 | 10.5 | Performance check | S | Verified 60 FPS on software rendering in the spike. Re-verify with all layers live. | `TODO` |
 | 10.6 | Keyboard shortcuts | S | Space = play/pause, arrows = scrub, `R` = reset. | `TODO` |
 | 10.7 | Responsive layout | M | Must work on a laptop screen. Not mobile-first — this is a desk tool. | `TODO` |
@@ -171,9 +171,9 @@
 
 | # | Task | Size | Detail | Status |
 |---|---|---|---|---|
-| 11.1 | Drop-zone UI | M | Visible affordance for adding `.nakama-0` files. Proves the pipeline is real. | `TODO` |
-| 11.2 | Map-config UI | M | Add a 4th map: upload minimap, enter scale + origin, save. **No redeploy needed (D9)** — this is what makes it a tool rather than a viewer of three specific maps. | `TODO` |
-| 11.3 | Map-version support (D15) | M | Multiple minimap images per map; data taggable to a version. The map didn't change in this data, but designers ship changes constantly. Cheap now, painful to retrofit. | `TODO` |
+| 11.1 | Drop-zone UI | M | ✅ `src/ui/DataManager.tsx` ("Manage data" in the header): drag `.nakama-0`/folder or choose files. Report per import: files read, rows parsed, duplicates, **failures per file**, unknown maps/events. Verified live: dropping Feb_10 (437 files + 1 corrupt) reported **437 read, 33,687 rows, 1 failed** (matches the pipeline). Persisted in IndexedDB (`src/data/persist.ts`); survives reload; "Remove all added data" clears it. hyparquet lazy-loaded so it stays out of the initial chunk. | `DONE` |
+| 11.2 | Map-config UI | M | ✅ "Add a map" form: id, minimap image, scale, origin X/Z, version. Registers a `MapConfig` + minimap (data URL via `registerMinimap`) with no redeploy. Verified: "New Map" appears in the switcher, its minimap renders, survives reload, removable. Note: the supplied dataset has no 4th-map files, so data-on-new-map is proven at unit level (`merge.test.ts`) rather than by a live drop. | `DONE` |
+| 11.3 | Map-version support (D15) | M | ◑ Partial: each added map carries a `version` field (stored, shown, persisted), and `MapConfig.version` is threaded through. Full multi-minimap-per-map with per-row version tagging is scaffolding only — deferred as low-value for this dataset (no geometry change across the five days). | `WIP` |
 
 ---
 
@@ -184,7 +184,7 @@
 | 12.1 | Cloudflare deploy | S | ✅ Live at **https://lila-pjvt.msf1514.workers.dev** as a Worker with Static Assets. `wrangler.jsonc` committed so deploys reproduce from a clean clone. | `DONE` |
 | 12.1a | **Continuous deployment on push** | S | ✅ Working. Build `d57bb47` succeeded in 90s and shipped the current bundle. Fixed by declaring `build.command` in `wrangler.jsonc` rather than in the dashboard, so it cannot silently break again. | `DONE` |
 | 12.2 | Verify from a clean browser | S | ✅ Playwright against the live URL: canvas present, all 3 maps render, zero console errors, `bundle.bin` serves as 2,136,384 B `application/octet-stream`, unknown paths 404 (no SPA fallback masking). | `DONE` |
-| 12.3 | Check payload + load time | M | ⚠️ **7.0s to interactive** against a < 3s target. Cause: deck.gl ships 973 KB JS (284 KB gz) plus the 2.1 MB `bundle.bin`. Needs code-splitting / lazy deck.gl import and possibly a smaller first-paint payload. Carried into Phase 10 polish. | `TODO` |
+| 12.3 | Check payload + load time | M | ✅ Code-split deck.gl into a lazy `MapStage` chunk; initial JS **1,128 KB → 271 KB** (gzip 326 → 86 KB). Skeleton paints the shell first. Fast-3G FMP **2,052 → 860 ms**; warm-local time-to-map **~1.1-2.2 s (< 3 s)**. Time-to-map on a saturated link is unchanged (same total bytes); shrinking `bundle.bin` is out of scope. | `DONE` |
 | 12.4 | Verify deep links work in production | S | Verified locally in a fresh browser context. Re-verify against the live URL after this deploy. | `WIP` |
 
 ---

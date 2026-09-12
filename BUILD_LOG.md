@@ -39,6 +39,204 @@
 
 ---
 
+## 2026-09-12 - Stage 5 - Design pass (final stage)
+**Tasks:** 10.2, 10.4   **Commit:** _(pending)_   **Status:** DONE
+
+### Did
+- Reviewed all major states together at 1440x900 (screenshots `spike/s5_*.png`).
+- `src/App.tsx`: side-by-side splits only when a comparison exists; otherwise a single full-width
+  map plus a prompt. Removed the empty right-half void.
+- `src/ui/DataManager.tsx` + `controls.css`: styled the Add-a-map minimap file input to match the
+  drop-zone affordance, with a filename readout.
+
+### Verified (Playwright, real GL, 1440x900)
+| State | Result |
+|---|---|
+| default / hotspots / filtered | coherent; map is the loudest element |
+| difference | header legend + "choose to compare" note, side A shown as context |
+| side-by-side, no choice | **fixed**: full-width map + prompt, no empty half |
+| side-by-side, comparing | clean 1fr/1fr split, linked panning (566 vs 1 matches) |
+| data notes / data manager | consistent modal styling |
+| `npx vitest run` | **97 passed** |
+| tsc | no new errors | 
+| console errors | none in any state |
+
+### Notes
+- The pass was deliberately small: the UI already cohered from phases 2-9, so beyond the two
+  genuine defects there was nothing to fix without inventing churn. No new colours, sizes or
+  durations were introduced.
+
+### Files
+Modified: `src/App.tsx` · `src/ui/DataManager.tsx` · `src/ui/controls.css`
+
+---
+
+## 2026-09-12 - Stage 4 - Extensibility (drop zone, IndexedDB, map config)
+**Tasks:** 11.1, 11.2 (11.3 partial)   **Commit:** _(pending)_   **Status:** DONE
+
+### Did
+- `src/data/merge.ts` (+ `merge.test.ts`, 5 tests): re-encode base + dropped rows into one
+  bundle, deduped by match id, matchMeta/stats/elapsed mirrored from build.mjs.
+- `src/data/persist.ts`: IndexedDB persistence for added rows + maps, fully guarded.
+- `src/ui/DataManager.tsx`: header "Manage data" → drop zone + per-file report + add-a-map form
+  + remove. hyparquet dynamically imported (own lazy chunk).
+- `src/map/project.ts`: `registerMinimap` so runtime maps resolve their uploaded image.
+- `src/App.tsx`: base+added → merged store via useMemo; onIngest/onAddMap/onClear; stale-map
+  self-heal + guarded reads. `LayerPanel` shares the left stack. CSS in `controls.css`.
+
+### Verified (Playwright, real GL, live DOM)
+| Check | Result |
+|---|---|
+| Drop reports match pipeline | Feb_10: 437 files read, 33,687 rows, 0 dup, 0 unknown (pipeline ref identical) |
+| Per-file failure reported | broken.nakama-0 → "parquet file invalid (footer != PAR1)" |
+| 4th map added via UI renders | "New Map" in switcher, minimap renders, 0 rows (no data files exist) |
+| Survives reload | added map present after reload (IndexedDB) |
+| Removable | "Remove all added data" → map gone |
+| Console errors | none |
+| `npx vitest run` | **97 passed** |
+| Initial JS chunk | 94.5 KB gz (deck.gl + hyparquet both lazy) |
+
+### Notes
+- **Merge, not two stores.** Re-encoding to the pipeline's exact columnar shape keeps one query
+  path; the Store's sort/contiguity invariants are preserved (tested).
+- **Bug caught by looking, not by compiling:** a `key={dataVersion}` remount closed the data
+  panel the instant an import finished, so the report never showed and the harness timed out with
+  no error. Removed the remount; the store already recomputes from the `added` dependency.
+- **Second bug:** removing the map you are viewing crashed on `mapConfig[removedMap].label`.
+  Fixed with a guarded `mapId`, a defensive EmptyState read, and a self-heal effect.
+- **Honest dataset limits:** all provided telemetry is already in the base bundle, so real drops
+  are duplicates (skipped) — parser parity shown via the report + shared transform + pipeline
+  tests; and there are no 4th-map files, so data-on-new-map is unit-tested in `merge.test.ts`.
+- Scope: new files under src/data (merge, persist) added; existing ingest/loader/store/query/
+  types were NOT modified — ingest's parsing is untouched, as required.
+- Scripts/shots: `scratchpad/spike/s4.mjs`, `hotprobe*` (n/a), `s4_report.png`, `s4_newmap.png`.
+
+### Files
+Created: `src/data/merge.ts` · `src/data/merge.test.ts` · `src/data/persist.ts` · `src/ui/DataManager.tsx`
+Modified: `src/App.tsx` · `src/map/project.ts` · `src/ui/LayerPanel.tsx` · `src/ui/controls.css`
+
+---
+
+## 2026-09-12 - Stage 3 - Hotspots and drill-down
+**Tasks:** 8.1 - 8.5 (8.6 cut)   **Commit:** _(pending)_   **Status:** DONE
+
+### Did
+- `src/map/hotspots.ts` (pure) + `src/map/hotspots.test.ts` (5 tests): threshold traffic grid at
+  the 90th percentile of non-empty cells, 4-connected components, rank clusters by summed share,
+  min 2 cells, cap 8.
+- `src/ui/Hotspots.tsx`: three-depth panel (cluster list → journeys → run detail).
+- `src/map/deckLayers.ts`: `hotspotCellsLayer` (pickable, onClick), `hotspotLabelLayer`
+  (TextLayer), `runPathLayer`. `src/ui/MapStage.tsx`: overlay wired, built fresh each render.
+- `src/App.tsx`: trafficGrid + computeHotspots memos, cluster/run selection, journeys and
+  runDetail derivation, Layers/Hotspots tabs, tooltip extended for cells. `src/ui/LayerPanel.tsx`:
+  de-absolute-positioned to share the left stack. CSS in `controls.css`.
+
+### Verified (Playwright, real GL, live DOM read)
+| Check | Result |
+|---|---|
+| Clusters listed | 8, each > 1 cell; every row shows share |
+| Cluster count + top share | Ambrose 18 / 4.1% · Lockdown 16 / 3.8% · Grand Rift 10 / 7.1% |
+| No dominant cluster | topShare < 0.10 on all maps (asserted in test) |
+| Two clicks to one run | cluster 1 (4.1%/21c/202 journeys) → run b6d86df4, 12:05, 116 samples, 20 loot, 2 kills, 1 death |
+| Hover a cell | "Cluster 5 · 41 players through this cell" |
+| Footprint & path by looking | `s3_cluster.png` footprint under label 1; `s3_run.png` path passes through it |
+| `npx vitest run` | **92 passed** |
+| Console errors | none |
+
+### Notes
+- **Threshold choice is the whole game.** The 80th percentile the brief cites reproduces the
+  cluster COUNTS (44/74/33 ≈ 43/78/36) but produces a single 13% / 85-cell blob as the top
+  cluster — the "merged everything" failure. The 90th percentile keeps the same unconcentrated
+  story while breaking that blob into nameable areas; the top cluster is then only 3.8-7.1%.
+- Distance per run was left off the detail card: the 518s max sampling gap makes path length
+  unreliable, and a confident wrong number is worse than an omitted one.
+- Probes/shots: `scratchpad/spike/hotprobe*.mjs`, `s3.mjs`, `s3b.mjs`, `s3_*.png`.
+
+### Files
+Created: `src/map/hotspots.ts` · `src/map/hotspots.test.ts` · `src/ui/Hotspots.tsx`
+Modified: `src/App.tsx` · `src/ui/MapStage.tsx` · `src/map/deckLayers.ts` · `src/ui/LayerPanel.tsx` · `src/ui/controls.css`
+
+---
+
+## 2026-09-12 - Stage 2 - Data honesty (disclosure surface + hint)
+**Tasks:** 10.1, 10.3   **Commit:** _(pending)_   **Status:** DONE
+
+### Did
+- `src/ui/DataNotes.tsx`: header "Data notes" button + modal panel; `OrientationHint` first-run
+  nudge. All figures computed from `store.meta.stats` and `store.meta.matchMeta` at render.
+- `src/App.tsx`: mounted `<DataNotes>` in the header (pushed right), `<OrientationHint>` in the
+  canvas. `src/ui/controls.css`: `.data-notes-*`, `.dn-*`, `.orient-*` (tokens only).
+
+### Verified (Playwright, real GL, 1440x900, figures read back from the live DOM)
+| Check | Result |
+|---|---|
+| Figures shown = bundle | vs bots 2,410 · to bots 699 · storm 39 · **PvP 3** · matches 796 · solo-human 779/780 · multi-journey 53/796 · loot 12,866 · dup 1/1,243 (88 rows) · ambiguous 3 (1379,1402,1429) · OOB 0 |
+| PvP caveat in words | lead states it plainly, before any number |
+| Reads as caveat not boast | confirmed by looking (`spike/s2_panel.png`) |
+| Dialog a11y | Escape closes; focus returns to trigger; Tab trapped |
+| Hint appears once | visible first load; "Got it" → gone; still gone after reload |
+| `npx vitest run` | **87 passed** |
+| Console errors | none |
+
+### Notes
+- **PvP = `eventCounts.Kill` = 3**, NOT `sum(matchMeta.pvp)` = 6. The `pvp` per-match field
+  counts Kill AND Killed (this player as killer or victim in a player encounter), so it
+  double-counts. The honest "player-versus-player kills" figure is the Kill event count.
+- localStorage is wrapped in try/catch on every read and write; if blocked, the hint simply
+  does not show rather than nagging each load.
+- Scripts/shots: `scratchpad/spike/s2.mjs`, `s2_panel.png`, `s2_firstload.png`.
+
+### Files
+Created: `src/ui/DataNotes.tsx`
+Modified: `src/App.tsx` · `src/ui/controls.css`
+
+---
+
+## 2026-09-12 - Stage 1 - Load time (code split + skeleton)
+**Tasks:** 12.3   **Commit:** _(pending)_   **Status:** DONE
+
+### Did
+- Split `src/map/layers.ts` (pure data prep, no deck.gl) from new `src/map/deckLayers.ts`
+  (the only deck.gl import). `heatLayer`/`deadSpaceLayer`/`eventLayer`/`pathLayer`/`actorLayer`/
+  `diffLayer` moved out; pure `heatPoints`/`trafficImage`/`collectEvents`/`buildPaths`/`diffImage`
+  stayed, so App can filter, aggregate and bake textures with no deck.gl in the load path.
+- New `src/ui/MapStage.tsx`: builds the layer arrays (fresh Layer instances each render, inputs
+  memoised) and renders MapCanvas(es). App loads it via `React.lazy` behind `<Suspense>` and
+  warms `import('./ui/MapStage')` at module scope, next to `loadBundle()`, so renderer + data
+  download in parallel.
+- `AppSkeleton` + `MapAreaSkeleton` reuse the real `.app` grid; CSS `.sk*` in `controls.css`,
+  shimmer gated on `prefers-reduced-motion`.
+
+### Verified
+| Check | Result |
+|---|---|
+| `npx vite build` initial JS | **1,128 KB → 271 KB** (gzip 326 → 86 KB) |
+| deck.gl chunk | lazy `MapStage` 858 KB (240 KB gz) |
+| FMP, Fast-3G throttle | **2,052 ms blank → 860 ms full skeleton** |
+| Time-to-map, warm localhost | **~1.1-2.2 s (< 3 s target)** |
+| Time-to-map, Fast-3G | ~13.3 → 13.7 s (unchanged; same total bytes) |
+| Map draws under real GL | yes (`spike/load_after_throttle_ready.png`) |
+| `npx vitest run` | **87 passed** |
+| Console errors | none in every Playwright run |
+
+### Notes
+- Measured with Playwright chromium (real GL, no `--use-gl=swiftshader`) against `vite preview`
+  at 1440x900; before/after compared on the same harness by stashing the changes and rebuilding
+  HEAD. Scripts and shots in `scratchpad/spike/` (`measure.mjs`, `load_*`).
+- The split trades nothing for a much earlier first paint: total transfer is unchanged, so a
+  bandwidth-bound viewer still waits the same time for the MAP, but sees the tool's shape in
+  under a second instead of a blank screen. Cutting time-to-map means shrinking `bundle.bin`
+  (under `pipeline/`, out of scope for these stages).
+- `tsc -b` still reports the 5 pre-existing errors (import.meta.env in loader/project, unused
+  ts-expect-error in ingest, unused `mapIdx` in query, a MapCanvas controller type); none are
+  new and the build runs `tsc -b --noCheck`.
+
+### Files
+Created: `src/map/deckLayers.ts` · `src/ui/MapStage.tsx`
+Modified: `src/App.tsx` · `src/map/layers.ts` · `src/ui/controls.css`
+
+---
+
 ## 2026-09-11 - Phase 9 - URL state and copy link
 **Tasks:** 9.1 - 9.3   **Commit:** _(this commit)_   **Status:** DONE
 

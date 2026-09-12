@@ -491,6 +491,129 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-12 - STAGE 5 COMPLETE (design pass) - ALL FIVE STAGES DONE
+- Reviewed every major state together at 1440x900 (default, hotspots, filtered, difference,
+  side-by-side with and without a comparison, data notes, data manager). The interface already
+  cohered from the earlier phases, so the pass was targeted, not churn.
+- **Fixed the one real layout defect:** side-by-side mode split the canvas 50/50 the moment it
+  was selected, leaving a large empty black void on the right until a comparison was chosen. Now
+  it stays a single full-width map with the prompt "Choose something to compare against, and the
+  second map appears here", and only splits once a B side exists. Verified both states.
+- **Coherence fix:** the raw native file input in the Add-a-map form now uses the same styled
+  "Choose image" affordance as the drop zone, with a filename readout.
+- Token-only (no new colours, sizes or durations outside tokens.css). **97 tests pass**, no new
+  tsc errors, zero console errors across every state.
+- **Every functional stage of the LILA tool is now complete.** Remaining work is the four
+  documents (README, ARCHITECTURE, INSIGHTS, WALKTHROUGH) and the submission checklist.
+
+### 2026-09-12 - STAGE 4 COMPLETE (extensibility)
+- **Dropped data is additive and merged into one bundle.** New `src/data/merge.ts`
+  (`buildMergedBundle`) re-encodes base + dropped rows into the same columnar shape the pipeline
+  emits, deduped by match id (re-dropping shipped data is a no-op, not a doubling), recomputing
+  matchMeta/stats/elapsed exactly as `build.mjs` does. One code path downstream. 5 tests.
+- **New `src/data/persist.ts`** — IndexedDB store for added rows + added maps, every access
+  guarded so a blocked store degrades to "nothing persisted" rather than throwing.
+- **New `src/ui/DataManager.tsx`** ("Manage data" in the header): drop `.nakama-0`/folder or
+  choose files; per-import report (files read, rows parsed, duplicates, **failures per file**,
+  unknown maps/events); "Add a map" form (id, minimap image, scale, origin X/Z, version);
+  "Remove all added data". hyparquet is dynamically imported so it stays out of the initial
+  chunk (its own 17.8 KB-gz lazy chunk).
+- **`registerMinimap` in project.ts**: added maps resolve their uploaded image (data URL) ahead
+  of the shipped `/minimaps` path, so a map added at runtime renders with no redeploy.
+- **App restructured**: base bundle + persisted added data → merged store via `useMemo`; adding
+  or removing data flows through `added` state (no remount — an earlier `key`-remount closed the
+  panel mid-import and discarded the report; removed). Stale `filter.map` self-heals and reads
+  are guarded so removing the map you are viewing cannot crash.
+- **Verified live (Playwright, real GL):** dropping Feb_10 (437 files + 1 deliberately corrupt)
+  reported **437 read, 33,687 rows, 0 dup, 1 failed ("parquet file invalid (footer != PAR1)"),
+  0 unknown** — matching the pipeline for that day. Added "New Map" appears in the switcher, its
+  minimap renders, **survives a reload** (IndexedDB) and is **removed** cleanly. **Zero console
+  errors.** 97 tests pass, no new tsc errors. Main chunk 94.5 KB gz (deck.gl + hyparquet both
+  lazy).
+- **Dataset limits, stated honestly:** the shipped bundle already contains ALL provided
+  telemetry, so any real file dropped is a duplicate (skipped) — parser parity is shown via the
+  import REPORT, and the shared `transform.mjs` + pipeline tests guarantee it. There are no
+  4th-map files in the dataset, so data-rendering-on-a-new-map is proven at unit level
+  (`merge.test.ts`: rows + config → a real map with a contiguous block) plus the live
+  add/render/persist/remove of the map itself. Full parse of all 1,243 files client-side works
+  but exceeds a 120s test timeout; a day's worth verifies the path.
+- **Next: Stage 5 - design pass** (the last stage). Awaiting go-ahead.
+
+### 2026-09-12 - STAGE 3 COMPLETE (hotspots and drill-down)
+- **New `src/map/hotspots.ts`** (pure, no deck.gl) + 5 tests. Threshold the traffic grid at the
+  **90th percentile** of non-empty cells, 4-connected components, rank CLUSTERS by summed share,
+  min 2 cells, cap 8. Chose 90th over the 80th deliberately: at the 80th the hottest cells all
+  touch and collapse into one 13% blob (85 cells) — a confident-looking top result that is the
+  FAILURE signal. At the 90th the blob breaks into the distinct dense areas a designer would name.
+- **Live-verified top-cluster shares (none dominant):** Ambrose 4.1% (18 clusters total),
+  Lockdown 3.8% (16), Grand Rift 7.1% (10). A test asserts `topShare < 0.10` for every map so a
+  future data change that re-merges the map fails loudly.
+- **Drill-down, two clicks:** `src/ui/Hotspots.tsx` panel (Layers/Hotspots tabs in a shared
+  left stack). Cluster list (each row: rank, share bar, share %, cell count) → click a cluster →
+  its footprint highlights on the map with numbered rank labels, journeys through it listed →
+  click a journey → that single run's path drawn bright (accent) + a run detail card (human/bot,
+  match, date, length, samples, loot, kills, deaths). Verified: Ambrose cluster 1 = 4.1%/21
+  cells/202 journeys → run b6d86df4, 12:05, 116 samples, 20 loot.
+- **Hover a cell shows its real count** ("Cluster 5 · 41 players through this cell") via a
+  pickable per-cell polygon layer and an extended tooltip.
+- **Confirmed by looking** (`spike/s3_cluster.png`, `s3_run.png`): the highlighted footprint sits
+  where the panel says (cluster 1 right-of-centre) and the selected run's path passes through it.
+- New deck factories in `deckLayers.ts`: `hotspotCellsLayer` (pickable, onClick selects),
+  `hotspotLabelLayer` (TextLayer rank numbers), `runPathLayer`. **92 tests pass**, zero console
+  errors, no new tsc errors. Main JS 276 → 283 KB; MapStage lazy chunk 858 → 908 KB (TextLayer).
+- **Next: Stage 4 - extensibility** (wire `ingest.ts` drop zone + IndexedDB + map-config UI +
+  map versions). Awaiting go-ahead.
+
+### 2026-09-12 - STAGE 2 COMPLETE (data honesty)
+- **New `src/ui/DataNotes.tsx`.** A permanent "Data notes" button at the far right of the
+  header opens a modal panel that states, in words before any figure, that combat is almost
+  entirely against bots and this data cannot answer PvP questions. Every figure is read from
+  `store.meta.stats` and `store.meta.matchMeta` at render time — nothing typed in.
+- **All 10 required figures shown and verified against the bundle** (read back out of the live
+  DOM by Playwright): kills vs bots 2,410 · deaths to bots 699 · storm 39 · **PvP kills 3**
+  (`eventCounts.Kill`; the discredited "6" is `sum(matchMeta.pvp)`, which double-counts
+  Kill+Killed) · matches 796 · exactly one human 779 of 780 · more than one journey 53 of 796 ·
+  loot 12,866 · duplicate file 1 of 1,243 (88 rows) · ambiguous accounts 3 (1379, 1402, 1429) ·
+  coordinates outside minimap 0.
+- **Reads as a caveat, not a boast** (confirmed by looking, `spike/s2_panel.png`): limit-framed
+  title, yellow-bordered lead, section headings that interpret ("Combat is against bots", "The
+  sample is effectively solo"), muted tabular numbers, footer noting figures come from the built
+  bundle. Panel is a real dialog: Escape closes, focus returns to the trigger, Tab is trapped.
+- **First-run orientation hint** (`OrientationHint`): one line — what this is, what to click
+  (day left, layers right), and the bot-combat caveat pointing at data notes. Dismissed with
+  "Got it", remembered in `localStorage` (every access guarded); verified it stays gone across a
+  reload (`spike/s2_firstload.png`).
+- **87 tests pass**, zero console errors, no new tsc errors. Initial JS 271 → 276 KB (DataNotes);
+  deck.gl still lazy.
+- **Next: Stage 3 - hotspots and drill-down.** Awaiting go-ahead.
+
+### 2026-09-12 - STAGE 1 COMPLETE (load time / code split)
+- **deck.gl lifted out of the initial chunk.** Split `src/map/layers.ts` into pure data prep
+  (no deck.gl) and a new `src/map/deckLayers.ts` (the sole deck.gl boundary). Layer-array
+  construction moved into a new lazily-loaded `src/ui/MapStage.tsx`; App renders it behind
+  `<Suspense>` and warms the import at module scope, alongside the data fetch, so the two large
+  downloads overlap.
+- **Initial JS chunk 1,128 KB → 271 KB** (gzip 326 → 86 KB). deck.gl now a lazy 858 KB
+  (240 KB gz) `MapStage` chunk. Measured with `npx vite build`.
+- **Skeleton, not a spinner.** `AppSkeleton` reuses the real `.app` grid so header, rail, map,
+  timeline and stat strip land in final positions; map area shows "Preparing the map". CSS in
+  `controls.css` (`.sk*`), shimmer disabled under `prefers-reduced-motion`.
+- **Measured (Playwright, real GL, 1440x900, vite preview):**
+  - Fast-3G throttle: first meaningful paint **2,052 ms (blank "Loading" text) → 860 ms
+    (full skeleton)**. Time-to-map ~13.3 s vs 13.7 s — unchanged, because total bytes are the
+    same over a saturated pipe; the win is FMP and perceived aliveness, not total transfer.
+  - Warm localhost: FMP ~0.1-1.4 s, **time-to-interactive-map ~1.1-2.2 s, under the 3 s target**.
+- **87 tests pass** (86 + the untracked diffprobe), zero console errors, real map draws under
+  real GL (screenshots `spike/load_after_throttle_{early,ready}.png`). No new tsc errors; the 5
+  `tsc -b` errors are the same pre-existing config artifacts (import.meta.env etc.), and the
+  build uses `tsc -b --noCheck`.
+- **Honest limit:** the split does NOT shrink total payload or reduce time-to-map on a
+  bandwidth-bound link. It removes deck.gl from the critical path to first paint and replaces a
+  blank screen with the tool's shape. Reducing time-to-map would mean shrinking `bundle.bin`,
+  which is under `pipeline/` and out of scope here.
+- **Next: Stage 2 - data honesty** (disclosure surface from `meta.stats`, PvP caveat in words,
+  first-run orientation hint). Awaiting go-ahead.
+
 ### 2026-09-11 - PHASE 9 COMPLETE (URL state and copy link)
 - Whole view state in the URL; copy-link control; browser back and forward work.
   **86 tests pass**, tsc clean, zero console errors.

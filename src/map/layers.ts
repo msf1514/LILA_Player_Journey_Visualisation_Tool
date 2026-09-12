@@ -1,12 +1,15 @@
 /**
- * layers.ts — deck.gl layer factories.
+ * layers.ts — pure data preparation for the map, with NO deck.gl dependency.
  *
- * Pure functions: given a Store, some row indices and a map config, return layers. No React,
- * no component state. That keeps every layer testable in isolation and means the canvas never
- * has to know what it is drawing.
+ * Given a Store, some row indices and a map config, these functions return aggregated grids,
+ * baked heat/diff textures (as canvases) and positioned geometry. No React, no component
+ * state, and crucially nothing imported from deck.gl, so App can run every filter, aggregate
+ * and image bake before the renderer chunk has arrived. The Layer factories that consume this
+ * output live in deckLayers.ts, which is the sole deck.gl boundary and is code-split away from
+ * the initial load.
  *
- * The layer catalogue is shaped by what this dataset actually contains, not by what an
- * extraction shooter usually contains:
+ * The catalogue is shaped by what this dataset actually contains, not by what an extraction
+ * shooter usually contains:
  *
  *   - Loot is 12,866 events, roughly 80% of all non-position activity. It is the main
  *     gameplay loop here, so it is a first-class layer rather than an afterthought.
@@ -18,12 +21,10 @@
  *     of the storm existing at all, so they get their own marker rather than being pooled.
  */
 
-import { BitmapLayer, ScatterplotLayer, PathLayer, PolygonLayer, IconLayer } from 'deck.gl'
-import type { Layer } from 'deck.gl'
 import type { Store } from '../data/store'
 import type { Grid, MapConfig } from '../data/types'
-import { worldToUV, uvToWorldSpace, MAP_BOUNDS, S } from './project'
-import { iconAtlas, rampDwell, rampTraffic, token, tokenA } from './theme'
+import { worldToUV, uvToWorldSpace, S } from './project'
+import { rampDwell, rampTraffic, token } from './theme'
 import type { RGB, ShapeName } from './theme'
 
 /**
@@ -221,46 +222,6 @@ function heatCanvas(points: WeightedPoint[], ramp: RGB[]): HTMLCanvasElement {
 export const trafficImage = (points: WeightedPoint[]) => heatCanvas(points, rampTraffic())
 export const dwellImage = (points: WeightedPoint[]) => heatCanvas(points, rampDwell())
 
-export function heatLayer(id: string, image: HTMLCanvasElement): Layer {
-  return new BitmapLayer({
-    id,
-    image,
-    bounds: MAP_BOUNDS,
-    opacity: 0.82,
-    textureParameters: { minFilter: 'linear', magFilter: 'linear' },
-    pickable: false,
-  })
-}
-
-// ─── Dead space ─────────────────────────────────────────────────────────────
-
-/**
- * Playable cells nobody ever entered.
- *
- * Drawn as explicit squares rather than a heatmap because absence is not a gradient: a cell
- * either saw a player or it did not, and shading it would imply a confidence the measurement
- * does not have.
- */
-export function deadSpaceLayer(cells: number[], size: number): Layer {
-  const step = S / size
-  const polys = cells.map((cell) => {
-    const col = cell % size
-    const row = (cell / size) | 0
-    const x = col * step
-    const y = (size - row - 1) * step
-    return { polygon: [[x, y], [x + step, y], [x + step, y + step], [x, y + step]] as [number, number][] }
-  })
-  return new PolygonLayer<{ polygon: [number, number][] }>({
-    id: 'dead-space',
-    data: polys,
-    getPolygon: (d) => d.polygon,
-    filled: true,
-    stroked: false,
-    getFillColor: tokenA('--ev-unknown', 0.3),
-    pickable: false,
-  })
-}
-
 // ─── Event markers ──────────────────────────────────────────────────────────
 
 /** Which shape and colour each event name draws as. Unknown names fall through to circle. */
@@ -301,29 +262,6 @@ export function collectEvents(
     })
   }
   return out
-}
-
-/**
- * Marker layer. Shape carries the event type, colour reinforces it.
- *
- * IconLayer rather than ScatterplotLayer because scatterplot can only draw circles, and
- * colour alone is not enough to separate six event meanings for a colour-blind viewer or in
- * a printed screenshot.
- */
-export function eventLayer(id: string, points: EventPoint[], sizePx = 11): Layer {
-  const { url, mapping } = iconAtlas()
-  return new IconLayer<EventPoint>({
-    id,
-    data: points,
-    iconAtlas: url,
-    iconMapping: mapping,
-    getIcon: (d) => d.shape,
-    getPosition: (d) => d.position,
-    getSize: sizePx,
-    sizeUnits: 'pixels',
-    getColor: (d) => tokenA(eventStyle(d.event).color, 0.92),
-    pickable: true,
-  })
 }
 
 // ─── Journeys ───────────────────────────────────────────────────────────────
@@ -389,43 +327,6 @@ export function buildPaths(
     if (current.length > 1) out.push({ path: current, bot: j.bot, userIdx: j.userIdx, matchIdx: j.matchIdx })
   }
   return out
-}
-
-export function pathLayer(segments: PathSegment[]): Layer {
-  return new PathLayer<PathSegment>({
-    id: 'paths',
-    data: segments,
-    getPath: (d) => d.path,
-    getColor: (d) => (d.bot ? tokenA('--actor-bot', 0.5) : tokenA('--actor-human', 0.55)),
-    getWidth: (d) => (d.bot ? 1.1 : 1.4),
-    widthUnits: 'pixels',
-    widthMinPixels: 1,
-    capRounded: true,
-    jointRounded: true,
-    pickable: false,
-  })
-}
-
-/**
- * Live actor positions. Bots are hollow, humans solid, so the two read apart even where a
- * cluster overlaps and even in greyscale.
- */
-export function actorLayer(points: { position: [number, number]; bot: boolean }[]): Layer {
-  return new ScatterplotLayer<{ position: [number, number]; bot: boolean }>({
-    id: 'actors',
-    data: points,
-    getPosition: (d) => d.position,
-    getRadius: 3,
-    radiusUnits: 'pixels',
-    radiusMinPixels: 2,
-    filled: true,
-    stroked: true,
-    lineWidthUnits: 'pixels',
-    getLineWidth: 1,
-    getFillColor: (d) => (d.bot ? tokenA('--actor-bot', 0.18) : tokenA('--actor-human', 0.85)),
-    getLineColor: (d) => (d.bot ? tokenA('--actor-bot', 0.95) : tokenA('--actor-human', 0.95)),
-    pickable: false,
-  })
 }
 
 /** Colour tokens the legend needs, resolved to CSS strings. */
@@ -524,16 +425,4 @@ export function diffImage(
 
   ctx.putImageData(img, 0, 0)
   return { canvas, stats: { shown, suppressed, maxDelta } }
-}
-
-/** Diff layer. Same bake-to-texture approach as the heat layers, for the same reason. */
-export function diffLayer(image: HTMLCanvasElement): Layer {
-  return new BitmapLayer({
-    id: 'diff',
-    image,
-    bounds: MAP_BOUNDS,
-    opacity: 0.85,
-    textureParameters: { minFilter: 'linear', magFilter: 'linear' },
-    pickable: false,
-  })
 }
