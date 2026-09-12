@@ -15,6 +15,7 @@
 import { useMemo } from 'react'
 import type { Layer } from 'deck.gl'
 import MapCanvas from './MapCanvas'
+import SplitCanvas from './SplitCanvas'
 import type { LayerId } from './LayerPanel'
 import type { Store } from '../data/store'
 import { filterRows } from '../data/query'
@@ -100,8 +101,6 @@ export interface MapStageProps {
   rowsB: Uint32Array | null
   filterB: Filter | null
   eventsFilter: string[] | undefined
-  sharedView: SharedView | undefined
-  setSharedView: (v: SharedView) => void
   // ── Hotspots ──────────────────────────────────────────────────────────────
   hotspotMode: boolean
   clusters: Cluster[]
@@ -124,7 +123,7 @@ export default function MapStage(props: MapStageProps) {
   const {
     mapId, config, focus, active, trafficImg, dwellImg, coverage, paths, actors,
     loot, kills, deaths, diffCanvas, getTooltip, compareMode, store, rowsB, filterB,
-    eventsFilter, sharedView, setSharedView,
+    eventsFilter,
     hotspotMode, clusters, gridValues, selectedClusterId, runPath, onSelectCluster,
     zoomBucket, onZoom,
   } = props
@@ -185,30 +184,33 @@ export default function MapStage(props: MapStageProps) {
     return out
   }, [compareMode, store, rowsB, filterB, active, eventsFilter, mapId, clustered, cellWorld])
 
-  const side = compareMode === 'side'
-
-  return (
-    <>
-      <MapCanvas
-        mapId={mapId}
-        config={config}
-        layers={layers}
+  // Side-by-side comparison renders as ONE canvas with two viewports (SplitCanvas) so there is
+  // a single WebGL context; anything else is a single map.
+  if (compareMode === 'side' && filterB) {
+    const rightMapId = filterB.map ?? mapId
+    return (
+      <SplitCanvas
+        leftMapId={mapId}
+        leftLabel={config.label}
+        leftLayers={layers}
+        rightMapId={rightMapId}
+        rightLabel={store.meta.mapConfig[rightMapId].label}
+        rightLayers={layersB}
         focus={focus}
         getTooltip={getTooltip}
-        viewState={side ? sharedView : undefined}
-        onViewState={side ? setSharedView : undefined}
         onZoom={onZoom}
       />
-      {side && filterB && (
-        <MapCanvas
-          mapId={filterB.map ?? mapId}
-          config={store.meta.mapConfig[filterB.map ?? mapId]}
-          layers={layersB}
-          focus={focus}
-          viewState={sharedView}
-          onViewState={setSharedView}
-        />
-      )}
-    </>
+    )
+  }
+
+  return (
+    <MapCanvas
+      mapId={mapId}
+      config={config}
+      layers={layers}
+      focus={focus}
+      getTooltip={getTooltip}
+      onZoom={onZoom}
+    />
   )
 }

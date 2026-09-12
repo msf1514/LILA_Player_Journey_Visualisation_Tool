@@ -491,6 +491,27 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-13 - FIX (deeper): side-by-side now one WebGL context (SplitCanvas)
+- The glitch persisted after the linking fix. Instrumented the render path: only 2 renders in 2s
+  idle after a filter change, no view-state or zoom-bucket loop, no console errors. So it was not
+  a React/state loop. Root cause: side-by-side rendered TWO separate `<DeckGL>` canvases = two
+  WebGL contexts fighting the compositor, each running its own hover-picking readback ("GPU stall
+  due to ReadPixels"). On real hardware that flickers and leaves a grey rectangle when a filter or
+  the timeline changes with the pointer over a map; headless never reproduced it.
+- Fix: new `src/ui/SplitCanvas.tsx` renders side-by-side as ONE Deck with TWO orthographic
+  viewports (left `x:0 width:50%`, right `x:50% width:50%`) and a `layerFilter` that draws each
+  side's layers in its own viewport (side B ids end in `-b`). One shared view drives both, so pan
+  and zoom stay locked. One WebGL context, one render loop, one pick pass. MapStage uses it for
+  side mode; single and difference still use MapCanvas.
+- App cleanup: removed the now-unused `sharedView` state and the `.app-canvas-split` two-canvas
+  grid; the Suspense fallback is a single skeleton.
+- Verified (Playwright, real GL): side mode now has ONE `<canvas>` (was two); both halves render
+  the correct sides (left = filter, right = compared day); pan and the single +/- control set
+  move both together; single, difference, hotspots and insights all render with one canvas each;
+  106 tests pass; zero console errors. NOTE: the visual glitch itself cannot be reproduced in
+  headless, so this removes the architectural cause rather than being pixel-verified here; needs a
+  real-browser confirm after deploy.
+
 ### 2026-09-13 - FIX: side-by-side maps desynced / glitched
 - Reported: the two compare maps glitch (jitter + a grey rectangle) when interacting. Reproduced:
   the maps were NOT staying linked. The +/- zoom buttons and reset wrote only LOCAL view state,

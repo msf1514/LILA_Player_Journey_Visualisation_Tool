@@ -12,7 +12,6 @@ import {
   GRID_SIZE, heatPoints, trafficImage, dwellImage,
   collectEvents, buildPaths, eventStyle, diffImage,
 } from './map/layers'
-import type { SharedView } from './ui/MapStage'
 import { computeHotspots } from './map/hotspots'
 import Hotspots from './ui/Hotspots'
 import type { RunKey, JourneyRow, RunDetail } from './ui/Hotspots'
@@ -545,9 +544,6 @@ function Workspace({
     return { ...diffImage(diffGrids(gridA, gridB), gridA, gridB), gridA, gridB }
   }, [compareMode, store, positionRows, rowsB, filterB, filter.events])
 
-  /** Side-by-side needs one shared view state, or the two maps cannot be compared. */
-  const [sharedView, setSharedView] = useState<SharedView | undefined>(undefined)
-
   // The deck.gl layer arrays are built inside MapStage, the code-split renderer. App produces
   // only the deck.gl-free inputs above (baked textures, positioned geometry, event points) and
   // hands them across, so nothing in the load path imports deck.gl.
@@ -645,8 +641,8 @@ function Workspace({
 
       <FilterRail store={store} filter={filter} onChange={setFilter} eventCounts={eventCounts} />
 
-      <div className={compareMode === 'side' && comparing ? 'app-canvas app-canvas-split' : 'app-canvas'}>
-        <Suspense fallback={<MapAreaSkeleton split={compareMode === 'side' && comparing} />}>
+      <div className="app-canvas">
+        <Suspense fallback={<MapAreaSkeleton />}>
           <MapStage
             mapId={mapId}
             config={config}
@@ -667,8 +663,6 @@ function Workspace({
             rowsB={rowsB}
             filterB={filterB}
             eventsFilter={filter.events}
-            sharedView={sharedView}
-            setSharedView={setSharedView}
             hotspotMode={hotspotMode}
             clusters={hotspots.clusters}
             gridValues={trafficGrid.values}
