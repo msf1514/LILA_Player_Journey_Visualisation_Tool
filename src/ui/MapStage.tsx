@@ -18,11 +18,12 @@ import MapCanvas from './MapCanvas'
 import SplitCanvas from './SplitCanvas'
 import type { LayerId } from './LayerPanel'
 import type { Store } from '../data/store'
-import { filterRows } from '../data/query'
+import { filterRows, aggregate, deadSpace } from '../data/query'
+import { maskReader } from '../data/loader'
 import type { Filter, MapConfig } from '../data/types'
-import { uvToWorldSpace, type UVBounds } from '../map/project'
+import { worldToUV, uvToWorldSpace, type UVBounds } from '../map/project'
 import {
-  heatPoints, trafficImage, collectEvents, clusterEvents,
+  GRID_SIZE, heatPoints, trafficImage, dwellImage, collectEvents, buildPaths, clusterEvents,
   type EventPoint, type PathSegment,
 } from '../map/layers'
 import type { Cluster } from '../map/hotspots'
@@ -169,12 +170,41 @@ export default function MapStage(props: MapStageProps) {
   }, [active, trafficImg, dwellImg, coverage, paths, actors, loot, kills, deaths, diffCanvas,
       hotspotMode, hotOverlay, runPath, onSelectCluster, clustered, cellWorld])
 
+  // Side B carries the SAME layer set as side A (ids suffixed -b so they never collide in the
+  // one split canvas), so every toggle in the Layers panel applies to both maps and a real
+  // dwell, coverage or path comparison is possible, not just traffic.
   const layersB = useMemo(() => {
     if (compareMode !== 'side' || !rowsB || !filterB) return []
+    const bMapId = filterB.map ?? mapId
+    const bConfig = store.meta.mapConfig[bMapId]
     const posB = filterRows(store, { ...filterB, events: intersectEvents(eventsFilter, ['Position', 'BotPosition']) })
-    const bConfig = store.meta.mapConfig[filterB.map ?? mapId]
     const out: Layer[] = []
     if (active.has('traffic')) out.push(heatLayer('traffic-b', trafficImage(heatPoints(store, posB, bConfig, 'traffic'))))
+    if (active.has('dwell')) out.push(heatLayer('dwell-b', dwellImage(heatPoints(store, posB, bConfig, 'dwell'))))
+    if (active.has('dead')) {
+      const mask = store.meta.masks?.[bMapId]
+      if (mask && posB.length) {
+        const cov = deadSpace(aggregate(store, posB, GRID_SIZE, 'traffic'), maskReader(mask.bits, mask.size), mask.size)
+        out.push(deadSpaceLayer(cov.dead, cov.size, 'dead-space-b'))
+      }
+    }
+    if (active.has('paths')) {
+      const bMapIdx = store.meta.dict.maps.indexOf(bMapId)
+      const allowed = new Set<number>()
+      for (const r of posB) allowed.add(store.cols.matchIdx[r] * 65536 + store.cols.userIdx[r])
+      const window = filterB.elapsedTo !== undefined ? { from: filterB.elapsedFrom ?? 0, to: filterB.elapsedTo } : undefined
+      out.push(pathLayer(buildPaths(store, bConfig, bMapIdx, (u, m) => allowed.has(m * 65536 + u), window), 'paths-b'))
+    }
+    if (active.has('actors')) {
+      const stride = Math.max(1, Math.ceil(posB.length / 14000))
+      const pts: { position: [number, number]; bot: boolean }[] = []
+      for (let i = 0; i < posB.length; i += stride) {
+        const r = posB[i]
+        const { u, v } = worldToUV(store.cols.x[r], store.cols.z[r], bConfig)
+        pts.push({ position: uvToWorldSpace(u, v), bot: store.isBotUser[store.cols.userIdx[r]] })
+      }
+      out.push(actorLayer(pts, 'actors-b'))
+    }
     // Same level of detail as side A, driven by the shared zoom, so the two maps read alike.
     out.push(...markerLayers('b-', {
       loot: collectEvents(store, rowsB, bConfig, LOOT_EVENTS),

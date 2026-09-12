@@ -713,6 +713,14 @@ function Workspace({
             {rightTab === 'insights' && <Insights store={store} onApply={applyInsightView} />}
           </div>
         )}
+        {/* Side-by-side keeps the Layers panel so a comparison can be built on any layer (dwell,
+            coverage, paths, markers), applied to both maps at once. Hotspots and insights are
+            single-map, so only Layers is shown here. */}
+        {compareMode === 'side' && (
+          <div className="left-stack">
+            <LayerPanel active={active} onToggle={toggle} counts={counts} />
+          </div>
+        )}
         {compareMode === 'diff' && (
           <div className="layer-note" role="note">
             Difference mode shows the change in traffic share only. Layers come from one side

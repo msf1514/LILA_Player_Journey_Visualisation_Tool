@@ -40,7 +40,7 @@ export function heatLayer(id: string, image: HTMLCanvasElement): Layer {
  * either saw a player or it did not, and shading it would imply a confidence the measurement
  * does not have.
  */
-export function deadSpaceLayer(cells: number[], size: number): Layer {
+export function deadSpaceLayer(cells: number[], size: number, id = 'dead-space'): Layer {
   const step = S / size
   const polys = cells.map((cell) => {
     const col = cell % size
@@ -50,7 +50,7 @@ export function deadSpaceLayer(cells: number[], size: number): Layer {
     return { polygon: [[x, y], [x + step, y], [x + step, y + step], [x, y + step]] as [number, number][] }
   })
   return new PolygonLayer<{ polygon: [number, number][] }>({
-    id: 'dead-space',
+    id,
     data: polys,
     getPolygon: (d) => d.polygon,
     filled: true,
@@ -104,9 +104,9 @@ export function eventClusterLayer(id: string, clusters: ClusterPoint[], basePx: 
   })
 }
 
-export function pathLayer(segments: PathSegment[]): Layer {
+export function pathLayer(segments: PathSegment[], id = 'paths'): Layer {
   return new PathLayer<PathSegment>({
-    id: 'paths',
+    id,
     data: segments,
     getPath: (d) => d.path,
     getColor: (d) => (d.bot ? tokenA('--actor-bot', 0.5) : tokenA('--actor-human', 0.55)),
@@ -123,9 +123,9 @@ export function pathLayer(segments: PathSegment[]): Layer {
  * Live actor positions. Bots are hollow, humans solid, so the two read apart even where a
  * cluster overlaps and even in greyscale.
  */
-export function actorLayer(points: { position: [number, number]; bot: boolean }[]): Layer {
+export function actorLayer(points: { position: [number, number]; bot: boolean }[], id = 'actors'): Layer {
   return new ScatterplotLayer<{ position: [number, number]; bot: boolean }>({
-    id: 'actors',
+    id,
     data: points,
     getPosition: (d) => d.position,
     getRadius: 3,

@@ -491,6 +491,18 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-13 - Side-by-side: layer toggles now work on both maps
+- Reported: comparing maps hid the Layers panel, so a dwell (or any non-traffic) comparison was
+  impossible. Two causes: the panel only rendered in single mode, and side B (`layersB`) only
+  built traffic + markers.
+- Fix: App now shows the Layers panel in side-by-side mode (Hotspots/Insights are single-map, so
+  only Layers is shown there). `layersB` in MapStage now builds the FULL set for side B - traffic,
+  dwell, dead space, paths, actors and the event markers - with `-b`-suffixed ids so nothing
+  collides in the single split canvas. `deadSpaceLayer`/`pathLayer`/`actorLayer` took an optional
+  id param for this.
+- Verified (Playwright, real GL): Layers panel present in side mode; enabling Dwell renders dwell
+  heat on BOTH maps; single/difference unchanged; 106 tests pass; zero console errors.
+
 ### 2026-09-13 - FIX (deeper): side-by-side now one WebGL context (SplitCanvas)
 - The glitch persisted after the linking fix. Instrumented the render path: only 2 renders in 2s
   idle after a filter change, no view-state or zoom-bucket loop, no console errors. So it was not
