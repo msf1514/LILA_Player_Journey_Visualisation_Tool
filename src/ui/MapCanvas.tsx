@@ -58,11 +58,21 @@ export default function MapCanvas({
   mapId, config, layers = [], focus = FULL_BOUNDS, getTooltip,
   viewState: externalView, onViewState, onZoom,
 }: MapCanvasProps) {
-  const linked = externalView !== undefined && onViewState !== undefined
+  // Side-by-side supplies a shared-view setter. Until the first interaction the shared view is
+  // empty and each canvas frames itself; once ANY interaction (drag, scroll, zoom button, reset)
+  // writes the shared view, both canvases render it and stay linked. Every control writes the
+  // shared view when it exists, so the two maps can never drift apart the way they did when only
+  // dragging synced them.
+  const shared = onViewState !== undefined
+  const linked = externalView !== undefined && shared
   const hostRef = useRef<HTMLDivElement>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [viewState, setViewState] = useState<ViewState>(() => initialViewState())
   const [imageError, setImageError] = useState<string | null>(null)
+  // The view currently on screen: the shared one once it exists, otherwise this canvas's own.
+  const activeView = linked ? externalView : viewState
+  // A view change goes to the shared view in side-by-side, or to local state otherwise.
+  const commit = (v: ViewState) => { if (shared && onViewState) onViewState(v); else setViewState(v) }
   // Whether the user has moved the view. Until they do, a resize should re-fit; after they
   // have panned or zoomed deliberately, a resize must not yank their view back.
   const touched = useRef(false)
@@ -102,7 +112,7 @@ export default function MapCanvas({
   // Report the zoom, bucketed to half steps, so marker layers can switch between clustered and
   // individual detail. Bucketing means this fires a handful of times across a full zoom, never
   // on every pan frame.
-  const renderZoom = (linked ? externalView : viewState)?.zoom ?? 0
+  const renderZoom = activeView?.zoom ?? 0
   const bucketRef = useRef<number | null>(null)
   useEffect(() => {
     const bucket = Math.round(renderZoom * 2) / 2
@@ -119,24 +129,25 @@ export default function MapCanvas({
     // between the designer's hand and the map.
     touched.current = true
     const v = { ...next, transitionDuration: 0 }
-    if (onViewState) {
-      // Linked canvases (side-by-side) share ONE view. Only the canvas the user is actively
-      // manipulating may drive it. deck.gl also fires this callback for programmatic echoes and
-      // for its own zoom-limit clamps, which carry no active interaction; when two maps with
-      // different fit limits share a view, feeding those echoes back makes them oscillate
-      // against each other's limits. So propagate user-driven changes only.
+    if (shared) {
+      // Only the canvas the user is actively manipulating drives the shared view. deck.gl also
+      // fires this callback for programmatic echoes and for its own zoom-limit clamps, which
+      // carry no active interaction; feeding those back makes two linked maps oscillate against
+      // each other's limits. So propagate user-driven changes only.
       const s = interactionState
-      if (s && (s.isDragging || s.isPanning || s.isZooming || s.isRotating)) onViewState(v)
+      if (s && (s.isDragging || s.isPanning || s.isZooming || s.isRotating)) onViewState!(v)
     } else {
       setViewState(v)
     }
-  }, [onViewState])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shared, onViewState])
 
   const reset = useCallback(() => {
     // Reset is an occasional action, so it is the one place a transition earns its keep.
     touched.current = false
-    setViewState({ ...initialViewState(size.width, size.height, focus), transitionDuration: 220 })
-  }, [size.width, size.height, focusKey])
+    commit({ ...initialViewState(size.width, size.height, focus), transitionDuration: 220 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [size.width, size.height, focusKey, shared, onViewState])
 
   const minimap = useMemo(
     () =>
@@ -155,7 +166,7 @@ export default function MapCanvas({
     <div ref={hostRef} style={{ position: 'relative', width: '100%', height: '100%', background: 'var(--bg-0)' }}>
       <DeckGL
         views={view}
-        viewState={linked ? externalView : viewState}
+        viewState={activeView}
         onViewStateChange={onViewStateChange as never}
         controller={{ dragRotate: false, doubleClickZoom: true, scrollZoom: { speed: 0.012, smooth: false } }}
         layers={[minimap, ...layers]}
@@ -165,19 +176,18 @@ export default function MapCanvas({
       />
 
       <ViewControls
-        zoom={viewState.zoom}
-        limits={{ minZoom: viewState.minZoom ?? -Infinity, maxZoom: viewState.maxZoom ?? Infinity }}
-        onZoom={(delta) =>
-          setViewState((v) => {
-            touched.current = true
-            const { minZoom, maxZoom } = initialViewState(size.width, size.height, focus)
-            return {
-              ...v,
-              zoom: Math.min(maxZoom, Math.max(minZoom, v.zoom + delta)),
-              transitionDuration: 0,
-            }
+        zoom={activeView.zoom}
+        limits={{ minZoom: activeView.minZoom ?? -Infinity, maxZoom: activeView.maxZoom ?? Infinity }}
+        onZoom={(delta) => {
+          touched.current = true
+          const { minZoom, maxZoom } = initialViewState(size.width, size.height, focus)
+          // Zoom buttons drive the shared view in side-by-side, so BOTH maps zoom together.
+          commit({
+            ...activeView,
+            zoom: Math.min(maxZoom, Math.max(minZoom, activeView.zoom + delta)),
+            transitionDuration: 0,
           })
-        }
+        }}
         onReset={reset}
       />
 

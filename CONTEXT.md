@@ -491,6 +491,20 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-13 - FIX: side-by-side maps desynced / glitched
+- Reported: the two compare maps glitch (jitter + a grey rectangle) when interacting. Reproduced:
+  the maps were NOT staying linked. The +/- zoom buttons and reset wrote only LOCAL view state,
+  and `linked` required the shared view to already be set, so zooming one map did not move the
+  other and the two drifted to different views; the churn/partial paints showed as the grey box.
+- Fix (`src/ui/MapCanvas.tsx`): a `commit(view)` helper routes EVERY view change (drag, scroll,
+  zoom buttons, reset) to the shared view whenever a shared setter exists (side-by-side), else to
+  local state. Each canvas frames itself until the first interaction, then both render the shared
+  view and stay locked together. Kept the user-driven-only guard on `onViewStateChange` so
+  deck.gl's clamp/echo emits still cannot start an oscillation.
+- Verified (Playwright, real GL): zooming the left map's +/- now moves the right map too; both
+  maps settle stable after a scroll-zoom in/out burst and mid-drag (no oscillation); single mode
+  (zoom, pan, reset) and difference mode unchanged; zero console errors; 106 tests pass.
+
 ### 2026-09-12 - ENHANCEMENTS 1-4 (jitter, LOD, insights, walkthrough)
 Four independent, gated changes on top of the five stages. 106 tests pass, zero console errors,
 no new tsc errors. Not yet committed at time of writing.
