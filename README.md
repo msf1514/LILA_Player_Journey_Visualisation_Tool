@@ -105,6 +105,10 @@ the browser, so anyone with the live URL can download it regardless of repositor
 visibility. If LILA would prefer the public deployment not carry the dataset, the author
 can strip it from the bundle or take the deployment down on request.
 
+To try the bring-your-own-data feature, open Manage data and drop one of the files in
+[sample_data/](sample_data/): `AmbroseValley_sample.nakama-0` merges into an existing map,
+and `SampleMap_new.nakama-0` uses an unknown map id so the tool prompts you to register it.
+
 ## Further reading
 
 - [ARCHITECTURE.md](ARCHITECTURE.md): how the data flows from parquet to pixels, the

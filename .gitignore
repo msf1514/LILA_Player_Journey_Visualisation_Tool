@@ -13,3 +13,10 @@ public/minimaps/
 # assignment brief - not part of the deliverable
 *.pdf
 tsconfig.tsbuildinfo
+
+# internal working docs and tooling (kept local, not part of the deliverable)
+BUILD_LOG.md
+CONTEXT.md
+TASKS.md
+prompt-master-main.zip
+skills/
