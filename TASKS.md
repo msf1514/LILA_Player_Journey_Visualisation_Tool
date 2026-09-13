@@ -217,19 +217,19 @@
 
 | # | Their requirement | Status |
 |---|---|---|
-| 14.1 | Tool is live at the hosted URL | `TODO` |
-| 14.2 | Player paths render correctly on the minimap | `TODO` |
-| 14.3 | Can tell humans apart from bots visually | `TODO` |
-| 14.4 | Kill, death, loot **and storm** events are marked | `TODO` |
-| 14.5 | Filtering by map / date / match works | `TODO` |
-| 14.6 | Timeline or playback shows match progression | `TODO` |
-| 14.7 | Heatmaps show kill zones, death zones **and** traffic | `TODO` |
-| 14.8 | Architecture doc covers coordinate mapping approach | `TODO` |
-| 14.9 | Three insights with supporting evidence | `TODO` |
-| 14.10 | Walkthrough covers all major features | `TODO` |
-| 14.11 | Single GitHub repo contains everything (no drive/doc links) | `TODO` |
-| 14.12 | Reviewers added as collaborators (private repo) | `TODO` |
-| 14.13 | Final pass: clone fresh → `npm i` → `npm run build` → works | `TODO` |
+| 14.1 | Tool is live at the hosted URL | `DONE` — live returns HTTP 200; bundle served. Caveat: 8 local commits are unpushed, so the live deploy still shows the pre-session build. Push to publish stages 1 to 8. |
+| 14.2 | Player paths render correctly on the minimap | `DONE` — walkthrough overview and hotspots shots; 0 of 89,016 rows out of bounds (project.test) |
+| 14.3 | Can tell humans apart from bots visually | `DONE` — actor filter plus solid human / dashed bot path styles and legend |
+| 14.4 | Kill, death, loot **and storm** events are marked | `DONE` — legend carries loot, kill vs bot, death to bot, death by storm, kill vs player |
+| 14.5 | Filtering by map / date / match works | `DONE` — filters shot |
+| 14.6 | Timeline or playback shows match progression | `DONE` — timeline shot with survivorship curve |
+| 14.7 | Heatmaps show kill zones, death zones **and** traffic | `DONE` — kill and death density layers added in stage 5; traffic heat existing; verified under real GL |
+| 14.8 | Architecture doc covers coordinate mapping approach | `DONE` — ARCHITECTURE.md with the worked example |
+| 14.9 | Three insights with supporting evidence | `DONE` — INSIGHTS.md, three plus a labelled fourth |
+| 14.10 | Walkthrough covers all major features | `DONE` — WALKTHROUGH.md, 12 annotated in-repo screenshots |
+| 14.11 | Single GitHub repo contains everything (no drive/doc links) | `DONE` with cleanup note — images are in-repo, no external links. Recommend removing internal tooling before submission: `prompt-master-main.zip` and `skills/`, and deciding whether the internal planning docs (CONTEXT.md, TASKS.md, BUILD_LOG.md) should ship. |
+| 14.12 | Reviewers added as collaborators (private repo) | `DECISION` — repo is public per decision D18 (private link 404s for reviewers whose usernames are unknown). Not changed. Confirm public, or go private and supply reviewer usernames to invite. |
+| 14.13 | Final pass: clone fresh → `npm i` → `npm run build` → works | `DONE` — fresh `git archive` checkout, `npm ci` then `npm run build` succeeded in 11.68s; pipeline regenerated the 2.1 MB bundle and minimaps; `dist/` built; 105 tests pass |
 
 ---
 
