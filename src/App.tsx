@@ -691,7 +691,10 @@ function Workspace({
   return (
     <div className="app">
       <header className="app-header">
-        <h1 className="app-title">LILA BLACK</h1>
+        <div className="app-brand">
+          <h1 className="app-title">LILA BLACK</h1>
+          <a className="app-byline" href="mailto:mohd.sufiyan.km@gmail.com" data-tip="Built by Sufiyan. Contact the author.">Built by Sufiyan</a>
+        </div>
         <CopyLink />
         <CompareBar
           store={store}
