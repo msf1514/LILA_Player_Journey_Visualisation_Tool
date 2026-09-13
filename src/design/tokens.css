@@ -111,6 +111,20 @@
   --heat-dwell-3: #db7f1f;
   --heat-dwell-4: #ffd98a;
 
+  /* Kill density: the vermillion of the kill marker, so heat and marks agree. */
+  --heat-kill-0: #12161d;
+  --heat-kill-1: #5c1f10;
+  --heat-kill-2: #9c3f16;
+  --heat-kill-3: #d55e00;
+  --heat-kill-4: #ffb072;
+
+  /* Death density: the reddish purple of the death marker. */
+  --heat-death-0: #12161d;
+  --heat-death-1: #3a1830;
+  --heat-death-2: #7a2f63;
+  --heat-death-3: #cc79a7;
+  --heat-death-4: #f4c4dd;
+
   /* Diff view: red = more now, blue = less now, near-transparent = unchanged.
      Diverging and symmetric so neither direction reads as louder than the other. */
   --diff-neg: #4b8fd0;

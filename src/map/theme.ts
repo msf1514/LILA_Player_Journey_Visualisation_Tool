@@ -63,6 +63,16 @@ export const rampTraffic = (): RGB[] =>
 export const rampDwell = (): RGB[] =>
   [0, 1, 2, 3, 4].map((i) => token(`--heat-dwell-${i}`))
 
+/**
+ * Combat density ramps. Each takes the hue of its own marker so a kill heat map and a kill
+ * cross read as the same thing, and neither can be confused with traffic or dwell.
+ */
+export const rampKill = (): RGB[] =>
+  [0, 1, 2, 3, 4].map((i) => token(`--heat-kill-${i}`))
+
+export const rampDeath = (): RGB[] =>
+  [0, 1, 2, 3, 4].map((i) => token(`--heat-death-${i}`))
+
 // ─── Marker shapes ──────────────────────────────────────────────────────────
 
 /**

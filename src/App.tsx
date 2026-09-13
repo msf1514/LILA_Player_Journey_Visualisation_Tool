@@ -10,6 +10,7 @@ import { worldToUV, uvToWorldSpace, padBounds, registerMinimap } from './map/pro
 import type { UVBounds } from './map/project'
 import {
   GRID_SIZE, heatPoints, trafficImage, dwellImage,
+  killImage, deathImage, eventHeatPoints,
   collectEvents, buildPaths, eventStyle, diffImage,
 } from './map/layers'
 import { computeHotspots } from './map/hotspots'
@@ -459,6 +460,21 @@ function Workspace({
   const deaths = useMemo(() => collectEvents(store, rows, config, DEATH_EVENTS), [store, rows, config])
 
   /**
+   * Kill and death density textures, baked from the same filtered event points the markers use.
+   * Built only when the layer is on, for the same cost reason the traffic and dwell textures are.
+   */
+  const wantKillHeat = active.has('kill-heat')
+  const wantDeathHeat = active.has('death-heat')
+  const killHeatImg = useMemo(
+    () => (wantKillHeat ? killImage(eventHeatPoints(kills)) : null),
+    [wantKillHeat, kills],
+  )
+  const deathHeatImg = useMemo(
+    () => (wantDeathHeat ? deathImage(eventHeatPoints(deaths)) : null),
+    [wantDeathHeat, deaths],
+  )
+
+  /**
    * Paths take the two filter kinds differently, and the distinction matters.
    *
    * Map, date and actor choose WHICH journeys to draw: a journey is a whole route, and
@@ -748,6 +764,8 @@ function Workspace({
             active={active}
             trafficImg={trafficImg}
             dwellImg={dwellImg}
+            killHeatImg={killHeatImg}
+            deathHeatImg={deathHeatImg}
             coverage={coverage}
             paths={paths}
             actors={actors}

@@ -2,7 +2,9 @@ import { eventStyle, legendColor } from '../map/layers'
 import { shapeSvg } from '../map/theme'
 import type { ShapeName } from '../map/theme'
 
-export type LayerId = 'traffic' | 'dwell' | 'loot' | 'kills' | 'deaths' | 'dead' | 'paths' | 'actors'
+export type LayerId =
+  | 'traffic' | 'dwell' | 'kill-heat' | 'death-heat'
+  | 'loot' | 'kills' | 'deaths' | 'dead' | 'paths' | 'actors'
 
 export interface LayerDef {
   id: LayerId
@@ -21,8 +23,10 @@ export interface LayerDef {
  * stuck. Splitting them is the whole reason the aggregation has two modes.
  */
 export const LAYERS: LayerDef[] = [
-  { id: 'traffic', label: 'Traffic',    hint: 'How many players pass through each area' },
-  { id: 'dwell',   label: 'Dwell',      hint: 'How long players stay, weighted by time' },
+  { id: 'traffic',    label: 'Traffic',    hint: 'How many players pass through each area' },
+  { id: 'dwell',      label: 'Dwell',      hint: 'How long players stay, weighted by time' },
+  { id: 'kill-heat',  label: 'Kill zones', hint: 'Where kills concentrate, mostly against bots' },
+  { id: 'death-heat', label: 'Death zones', hint: 'Where players die, by any cause' },
   { id: 'loot',    label: 'Loot',       hint: '80% of all recorded activity' },
   { id: 'kills',   label: 'Kills',      hint: 'Almost entirely against bots' },
   { id: 'deaths',  label: 'Deaths',     hint: 'Split by cause: bot, storm or player' },
@@ -82,6 +86,8 @@ export default function LayerPanel({ active, onToggle, counts }: Props) {
 
         <LegendRamp label="Traffic" prefix="--heat-traffic" />
         <LegendRamp label="Dwell" prefix="--heat-dwell" />
+        <LegendRamp label="Kill zones" prefix="--heat-kill" />
+        <LegendRamp label="Death zones" prefix="--heat-death" />
         <LegendSwatch token="--ev-unknown" label="Dead space" alpha={0.35} />
       </div>
     </aside>

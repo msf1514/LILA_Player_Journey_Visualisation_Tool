@@ -24,7 +24,7 @@
 import type { Store } from '../data/store'
 import type { Grid, MapConfig } from '../data/types'
 import { worldToUV, uvToWorldSpace, S } from './project'
-import { rampDwell, rampTraffic, token } from './theme'
+import { rampDeath, rampDwell, rampKill, rampTraffic, token } from './theme'
 import type { RGB, ShapeName } from './theme'
 
 /**
@@ -221,6 +221,21 @@ function heatCanvas(points: WeightedPoint[], ramp: RGB[]): HTMLCanvasElement {
  */
 export const trafficImage = (points: WeightedPoint[]) => heatCanvas(points, rampTraffic())
 export const dwellImage = (points: WeightedPoint[]) => heatCanvas(points, rampDwell())
+
+/**
+ * Combat density textures, baked from discrete event points rather than position samples.
+ *
+ * Each event weighs one, so the heat answers "where do kills (or deaths) concentrate", which
+ * the individual markers cannot show once they overplot. Baked to a texture for the same reason
+ * traffic and dwell are: a designer needs to pan the map with markers on it, and a live GPU
+ * heatmap degrades exactly then. Built from the same filtered event points the markers use, so
+ * the two always agree.
+ */
+export const eventHeatPoints = (points: EventPoint[]): WeightedPoint[] =>
+  points.map((p) => ({ position: p.position, weight: 1 }))
+
+export const killImage = (points: WeightedPoint[]) => heatCanvas(points, rampKill())
+export const deathImage = (points: WeightedPoint[]) => heatCanvas(points, rampDeath())
 
 // ─── Event markers ──────────────────────────────────────────────────────────
 

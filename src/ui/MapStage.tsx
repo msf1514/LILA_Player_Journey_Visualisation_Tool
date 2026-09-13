@@ -23,7 +23,8 @@ import { maskReader } from '../data/loader'
 import type { Filter, MapConfig } from '../data/types'
 import { worldToUV, uvToWorldSpace, type UVBounds } from '../map/project'
 import {
-  GRID_SIZE, heatPoints, trafficImage, dwellImage, collectEvents, buildPaths, clusterEvents,
+  GRID_SIZE, heatPoints, trafficImage, dwellImage, killImage, deathImage, eventHeatPoints,
+  collectEvents, buildPaths, clusterEvents,
   type EventPoint, type PathSegment,
 } from '../map/layers'
 import type { Cluster } from '../map/hotspots'
@@ -88,6 +89,8 @@ export interface MapStageProps {
   active: Set<LayerId>
   trafficImg: HTMLCanvasElement | null
   dwellImg: HTMLCanvasElement | null
+  killHeatImg: HTMLCanvasElement | null
+  deathHeatImg: HTMLCanvasElement | null
   coverage: { dead: number[]; size: number } | null
   paths: PathSegment[]
   actors: { position: [number, number]; bot: boolean }[]
@@ -122,7 +125,8 @@ function intersectEvents(selected: string[] | undefined, needed: string[]): stri
 
 export default function MapStage(props: MapStageProps) {
   const {
-    mapId, config, focus, active, trafficImg, dwellImg, coverage, paths, actors,
+    mapId, config, focus, active, trafficImg, dwellImg, killHeatImg, deathHeatImg,
+    coverage, paths, actors,
     loot, kills, deaths, diffCanvas, getTooltip, compareMode, store, rowsB, filterB,
     eventsFilter,
     hotspotMode, clusters, gridValues, selectedClusterId, runPath, onSelectCluster,
@@ -156,6 +160,8 @@ export default function MapStage(props: MapStageProps) {
     if (diffCanvas) { out.push(diffLayer(diffCanvas)); return out }
     if (trafficImg) out.push(heatLayer('traffic', trafficImg))
     if (dwellImg) out.push(heatLayer('dwell', dwellImg))
+    if (killHeatImg) out.push(heatLayer('kill-heat', killHeatImg))
+    if (deathHeatImg) out.push(heatLayer('death-heat', deathHeatImg))
     if (active.has('dead') && coverage) out.push(deadSpaceLayer(coverage.dead, coverage.size))
     if (active.has('paths')) out.push(pathLayer(paths))
     if (active.has('actors')) out.push(actorLayer(actors))
@@ -167,7 +173,8 @@ export default function MapStage(props: MapStageProps) {
     }
     if (hotspotMode && runPath && runPath.length) out.push(runPathLayer(runPath))
     return out
-  }, [active, trafficImg, dwellImg, coverage, paths, actors, loot, kills, deaths, diffCanvas,
+  }, [active, trafficImg, dwellImg, killHeatImg, deathHeatImg, coverage, paths, actors,
+      loot, kills, deaths, diffCanvas,
       hotspotMode, hotOverlay, runPath, onSelectCluster, clustered, cellWorld])
 
   // Side B carries the SAME layer set as side A (ids suffixed -b so they never collide in the
@@ -181,6 +188,8 @@ export default function MapStage(props: MapStageProps) {
     const out: Layer[] = []
     if (active.has('traffic')) out.push(heatLayer('traffic-b', trafficImage(heatPoints(store, posB, bConfig, 'traffic'))))
     if (active.has('dwell')) out.push(heatLayer('dwell-b', dwellImage(heatPoints(store, posB, bConfig, 'dwell'))))
+    if (active.has('kill-heat')) out.push(heatLayer('kill-heat-b', killImage(eventHeatPoints(collectEvents(store, rowsB, bConfig, KILL_EVENTS)))))
+    if (active.has('death-heat')) out.push(heatLayer('death-heat-b', deathImage(eventHeatPoints(collectEvents(store, rowsB, bConfig, DEATH_EVENTS)))))
     if (active.has('dead')) {
       const mask = store.meta.masks?.[bMapId]
       if (mask && posB.length) {

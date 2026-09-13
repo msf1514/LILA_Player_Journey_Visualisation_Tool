@@ -35,7 +35,7 @@ export interface ViewState {
   compareValue: string | null
 }
 
-const ALL_LAYERS: LayerId[] = ['traffic', 'dwell', 'loot', 'kills', 'deaths', 'dead', 'paths', 'actors']
+const ALL_LAYERS: LayerId[] = ['traffic', 'dwell', 'kill-heat', 'death-heat', 'loot', 'kills', 'deaths', 'dead', 'paths', 'actors']
 const DEFAULT_LAYERS: LayerId[] = ['traffic', 'loot']
 const TIME_MODES: TimeMode[] = ['cumulative', 'window']
 const COMPARE_MODES: CompareMode[] = ['single', 'diff', 'side']
