@@ -96,6 +96,22 @@ export default function SplitCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.width, size.height, focusKey])
 
+  // R re-frames both maps, matching the reset button. Ignored while typing, and when a modifier
+  // is held so Ctrl or Cmd R still reloads the page.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'r' && e.key !== 'R') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = document.activeElement
+      if (el instanceof HTMLInputElement && el.type !== 'range') return
+      if (el instanceof HTMLTextAreaElement) return
+      e.preventDefault()
+      reset()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [reset])
+
   const zoomBy = (delta: number) => {
     touched.current = true
     const { minZoom, maxZoom } = initialViewState(size.width / 2, size.height, focus)
@@ -161,7 +177,8 @@ export default function SplitCanvas({
         <button type="button" aria-label="Zoom out" title="Zoom out" className="map-control"
           style={{ minWidth: 28, padding: 0 }} onClick={() => zoomBy(-0.5)}
           disabled={viewState.zoom <= (viewState.minZoom ?? -Infinity)}>−</button>
-        <button type="button" aria-label="Reset view" title="Reset view" className="map-control"
+        <button type="button" aria-label="Reset view" title="Reset view"
+          data-tip="Re-frame both maps to fit (or press R)." className="map-control"
           style={{ padding: '0 var(--space-2)' }} onClick={reset}>Reset</button>
       </div>
 

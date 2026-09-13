@@ -149,6 +149,22 @@ export default function MapCanvas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [size.width, size.height, focusKey, shared, onViewState])
 
+  // R re-frames the map, matching the reset button. Ignored while typing, and when a modifier
+  // is held so Ctrl or Cmd R still reloads the page.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'r' && e.key !== 'R') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const el = document.activeElement
+      if (el instanceof HTMLInputElement && el.type !== 'range') return
+      if (el instanceof HTMLTextAreaElement) return
+      e.preventDefault()
+      reset()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [reset])
+
   const minimap = useMemo(
     () =>
       new BitmapLayer({
@@ -224,15 +240,16 @@ function ViewControls({
     >
       <ControlButton label="Zoom in" onClick={() => onZoom(0.5)} disabled={zoom >= limits.maxZoom}>+</ControlButton>
       <ControlButton label="Zoom out" onClick={() => onZoom(-0.5)} disabled={zoom <= limits.minZoom}>−</ControlButton>
-      <ControlButton label="Reset view" onClick={onReset} wide>Reset</ControlButton>
+      <ControlButton label="Reset view" tip="Re-frame the map to fit (or press R)." onClick={onReset} wide>Reset</ControlButton>
     </div>
   )
 }
 
 function ControlButton({
-  label, onClick, disabled, wide, children,
+  label, tip, onClick, disabled, wide, children,
 }: {
   label: string
+  tip?: string
   onClick: () => void
   disabled?: boolean
   wide?: boolean
@@ -243,6 +260,7 @@ function ControlButton({
       type="button"
       aria-label={label}
       title={label}
+      data-tip={tip}
       onClick={onClick}
       disabled={disabled}
       className="map-control"
