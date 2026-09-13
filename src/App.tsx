@@ -181,6 +181,9 @@ function Workspace({
 }) {
   // File names already loaded, so re-dropping the same file is skipped by the parser.
   const existingFileNames = useMemo(() => new Set(added.rows.map((r) => r.file)), [added.rows])
+  // Match ids that came from dropped data, so added telemetry can be told apart from the shipped
+  // bundle in the picker, the stats and as a one-click filter.
+  const addedMatchIds = useMemo(() => new Set(added.rows.map((r) => r.matchId)), [added.rows])
   const maps = store.meta.dict.maps
 
   /**
@@ -388,6 +391,14 @@ function Workspace({
 
   /** One filter pass. Every layer, count and stat below derives from this single result. */
   const rows = useMemo(() => filterRows(store, effective), [store, effective])
+
+  // How many rows in the current view come from dropped data, for the "N added" stat readout.
+  const addedInView = useMemo(() => {
+    if (!addedMatchIds.size) return 0
+    let n = 0
+    for (const r of rows) if (addedMatchIds.has(store.matchId(store.cols.matchIdx[r]))) n++
+    return n
+  }, [rows, addedMatchIds, store])
 
   /**
    * Event counts under every filter EXCEPT the event filter itself.
@@ -723,7 +734,7 @@ function Workspace({
         </span>
       </header>
 
-      <FilterRail store={store} filter={filter} onChange={setFilter} eventCounts={eventCounts} />
+      <FilterRail store={store} filter={filter} onChange={setFilter} eventCounts={eventCounts} addedMatchIds={addedMatchIds} />
 
       <div className="app-canvas">
         <Suspense fallback={<MapAreaSkeleton />}>
@@ -892,6 +903,7 @@ function Workspace({
         paths={paths.length}
         coverage={coverage}
         filtered={isFiltered(effective)}
+        addedInView={addedInView}
       />
 
       <Walkthrough steps={TOUR_STEPS} open={tourOpen} onClose={closeTour} onStep={onTourStep} />
@@ -1017,7 +1029,7 @@ function tooltip({ object }: { object?: unknown }) {
 }
 
 function StatStrip({
-  mapLabel, rows, loot, kills, deaths, paths, coverage, filtered,
+  mapLabel, rows, loot, kills, deaths, paths, coverage, filtered, addedInView,
 }: {
   mapLabel: string
   rows: number
@@ -1027,11 +1039,15 @@ function StatStrip({
   paths: number
   coverage: { coverage: number; playable: number; visited: number; size: number } | null
   filtered: boolean
+  addedInView: number
 }) {
   return (
     <div className="stat-strip">
       <span><b>{mapLabel}</b></span>
-      <span>rows <b className="num">{rows.toLocaleString()}</b></span>
+      <span>
+        rows <b className="num">{rows.toLocaleString()}</b>
+        {addedInView > 0 && <span className="stat-added"> +{addedInView.toLocaleString()} added</span>}
+      </span>
       <span>loot <b className="num">{loot.toLocaleString()}</b></span>
       {/* "vs bots" is not decoration: 2,410 of these kills are against bots and 3 are not. */}
       <span>kills vs bots <b className="num">{kills.toLocaleString()}</b></span>

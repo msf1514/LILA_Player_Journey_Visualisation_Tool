@@ -903,3 +903,17 @@
   background: var(--accent);
   vertical-align: middle;
 }
+
+/* Added-data markers: tell dropped telemetry apart from the shipped bundle. */
+.match-added {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--accent-weak);
+  border: 1px solid var(--accent);
+  color: var(--text-1);
+  font-size: 10px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+}
+.stat-added { color: var(--accent); }

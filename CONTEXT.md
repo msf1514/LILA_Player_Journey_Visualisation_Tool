@@ -491,6 +491,18 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-13 - Differentiate added data
+- Dropped telemetry can now be told apart from the shipped bundle: the match picker tags added
+  matches with an "added" pill, the stat strip shows "+N added" when the current view contains
+  dropped rows, and a "Show added matches only (N)" button isolates them on the current map (it
+  sets the match filter to the added ids). Nothing in src/data was touched; the set of added
+  match ids is derived in App from `added.rows`.
+- Verified (Playwright, real GL): after dropping the Ambrose sample, stat strip reads "+173
+  added", the sample match shows the added tag, and "show added only" isolates it (rows 173, all
+  added, Ambrose count 566 -> 567). 106 tests pass, zero console errors.
+- Sample data for testing lives in `sample_data/`: `AmbroseValley_sample.nakama-0` (existing map,
+  new match on 15 Feb) and `SampleMap_new.nakama-0` (unknown map, for the add-a-map flow).
+
 ### 2026-09-13 - Walkthrough reworked by impact
 - The first-run tour now leads by impact, not layout. Order: the data caveat first (a wrong
   reading is the costliest mistake), then Hotspots, Insights, Compare, Timeline survivorship, Add

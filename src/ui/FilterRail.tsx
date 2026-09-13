@@ -20,6 +20,8 @@ export interface FilterRailProps {
   onChange: (next: Filter) => void
   /** Event counts under every filter EXCEPT the event filter, so a zero is meaningful. */
   eventCounts: Record<string, number>
+  /** Match ids from dropped data, so added matches can be marked and isolated. */
+  addedMatchIds?: ReadonlySet<string>
 }
 
 /**
@@ -30,14 +32,14 @@ export interface FilterRailProps {
  * then what. That matches how a designer actually narrows a question rather than how the
  * data happens to be shaped.
  */
-export default function FilterRail({ store, filter, onChange, eventCounts }: FilterRailProps) {
+export default function FilterRail({ store, filter, onChange, eventCounts, addedMatchIds }: FilterRailProps) {
   const set = (patch: Partial<Filter>) => onChange({ ...filter, ...patch })
 
   return (
     <aside className="rail" aria-label="Filters">
       <MapSection store={store} filter={filter} set={set} />
       <DaySection store={store} filter={filter} set={set} />
-      <MatchSection store={store} filter={filter} set={set} />
+      <MatchSection store={store} filter={filter} set={set} addedMatchIds={addedMatchIds} />
       <ActorSection filter={filter} set={set} />
       <EventSection store={store} filter={filter} set={set} counts={eventCounts} />
     </aside>
@@ -138,10 +140,11 @@ const shortDate = (iso: string) =>
  * participant are listed first under their own heading, and every row shows its journey
  * count so the difference is visible before clicking rather than after.
  */
-function MatchSection({ store, filter, set }: { store: Store; filter: Filter; set: (p: Partial<Filter>) => void }) {
+function MatchSection({ store, filter, set, addedMatchIds }: { store: Store; filter: Filter; set: (p: Partial<Filter>) => void; addedMatchIds?: ReadonlySet<string> }) {
   const [query, setQuery] = useState('')
   const mapId = filter.map ?? store.meta.dict.maps[0]
   const selected = filter.matchIds?.[0]
+  const isAdded = (i: number) => Boolean(addedMatchIds?.has(store.matchId(i)))
 
   const { multi, single } = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -157,13 +160,25 @@ function MatchSection({ store, filter, set }: { store: Store; filter: Filter; se
     return { multi, single }
   }, [store, mapId, filter.dateFrom, filter.dateTo, query])
 
+  // Added matches on this map, for the one-click "show only added" filter.
+  const addedOnMap = useMemo(() => {
+    if (!addedMatchIds?.size) return [] as string[]
+    const out: string[] = []
+    store.meta.matchMeta.forEach((m, i) => {
+      if (m.map === mapId && addedMatchIds.has(store.matchId(i))) out.push(store.matchId(i))
+    })
+    return out
+  }, [store, mapId, addedMatchIds])
+  const showingAddedOnly = addedOnMap.length > 0 && filter.matchIds?.length === addedOnMap.length &&
+    addedOnMap.every((id) => filter.matchIds!.includes(id))
+
   const pick = (idx: number) => {
     const id = store.matchId(idx)
     set({ matchIds: selected === id ? undefined : [id] })
   }
 
   return (
-    <Section title="Match" tip="Focus a single match. Most matches hold one journey; the listed ones have several.">
+    <Section title="Match" tip="Focus a single match. Most matches hold one journey; the listed ones have several. Added data is tagged.">
       <input
         type="search"
         className="rail-input"
@@ -173,7 +188,18 @@ function MatchSection({ store, filter, set }: { store: Store; filter: Filter; se
         onChange={(e) => setQuery(e.target.value)}
       />
 
-      {selected && (
+      {addedOnMap.length > 0 && (
+        <button
+          type="button"
+          className="rail-clear"
+          data-tip="Isolate the matches you dropped in, on this map."
+          onClick={() => set({ matchIds: showingAddedOnly ? undefined : addedOnMap })}
+        >
+          {showingAddedOnly ? 'Showing added only. Show all' : `Show added matches only (${addedOnMap.length})`}
+        </button>
+      )}
+
+      {selected && !showingAddedOnly && (
         <button type="button" className="rail-clear" onClick={() => set({ matchIds: undefined })}>
           Showing one match. Show all
         </button>
@@ -182,12 +208,12 @@ function MatchSection({ store, filter, set }: { store: Store; filter: Filter; se
       <div className="match-list" role="listbox" aria-label="Matches">
         {multi.length > 0 && <p className="match-group">Multiple participants ({multi.length})</p>}
         {multi.map((i) => (
-          <MatchRow key={i} store={store} idx={i} selected={store.matchId(i) === selected} onPick={pick} />
+          <MatchRow key={i} store={store} idx={i} selected={store.matchId(i) === selected} added={isAdded(i)} onPick={pick} />
         ))}
 
         {single.length > 0 && <p className="match-group">Single journey ({single.length})</p>}
         {single.slice(0, 60).map((i) => (
-          <MatchRow key={i} store={store} idx={i} selected={store.matchId(i) === selected} onPick={pick} />
+          <MatchRow key={i} store={store} idx={i} selected={store.matchId(i) === selected} added={isAdded(i)} onPick={pick} />
         ))}
         {single.length > 60 && (
           <p className="match-more">
@@ -204,8 +230,8 @@ function MatchSection({ store, filter, set }: { store: Store; filter: Filter; se
 }
 
 function MatchRow({
-  store, idx, selected, onPick,
-}: { store: Store; idx: number; selected: boolean; onPick: (i: number) => void }) {
+  store, idx, selected, added, onPick,
+}: { store: Store; idx: number; selected: boolean; added?: boolean; onPick: (i: number) => void }) {
   const m = store.matchMeta(idx)
   const id = store.matchId(idx).slice(0, 8)
   return (
@@ -216,7 +242,10 @@ function MatchRow({
       className="match-row"
       onClick={() => onPick(idx)}
     >
-      <span className="num match-id">{id}</span>
+      <span className="match-id">
+        <span className="num">{id}</span>
+        {added && <span className="match-added">added</span>}
+      </span>
       <span className="match-meta">
         <span className="num">{m.journeys}</span> {m.journeys === 1 ? 'journey' : 'journeys'}
         {' · '}
