@@ -45,6 +45,7 @@ export default function DataManager(props: DataManagerProps) {
         className="map-control data-mgr-btn"
         aria-haspopup="dialog"
         aria-expanded={open}
+        data-tour="manage-data"
         onClick={() => setOpen(true)}
         data-tip="Add telemetry files or register a new map, with no redeploy."
       >

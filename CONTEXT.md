@@ -491,6 +491,20 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-13 - Walkthrough reworked by impact
+- The first-run tour now leads by impact, not layout. Order: the data caveat first (a wrong
+  reading is the costliest mistake), then Hotspots, Insights, Compare, Timeline survivorship, Add
+  your own data, and finally the Layers and Filter basics. Each step says what it is AND why it
+  matters.
+- Steps that live inside the collapsible panel (Hotspots, Insights, Layers) now carry a `tab` and
+  `needsPanel` hint; the Walkthrough calls an `onStep` prep before placing each step, so the host
+  opens the panel and selects the tab, then the spotlight lands on the next frame. Next/Back
+  advance by one and let that prep run, instead of pre-skipping panel steps while collapsed.
+- Verified (Playwright, real GL): first step is the caveat; order correct; all 8 spotlights
+  aligned at 1440x900 and no card overflow at 400px; shown once then not after reload; Tour button
+  reopens it; with the panel collapsed, reopening the tour opens the panel for the Hotspots step.
+  106 tests pass, zero console errors. This completes the four-change UX overhaul.
+
 ### 2026-09-13 - UX pass: collapsible panel, contextual help, audit tweaks
 - **Collapsible left panel.** The Layers/Hotspots/Insights stack now lives in a dock with a small
   "Layers" toggle; collapsing frees the whole map (matters most in side-by-side). Open/closed is

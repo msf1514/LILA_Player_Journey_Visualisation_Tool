@@ -17,16 +17,28 @@ export interface TourStep {
   sel: string
   title: string
   text: string
+  /** Panel tab this step needs visible; the host opens the panel and selects it first. */
+  tab?: 'layers' | 'hotspots' | 'insights'
+  /** True when the step's anchor lives inside the collapsible panel. */
+  needsPanel?: boolean
 }
 
 interface Rect { top: number; left: number; width: number; height: number }
 
 const PAD = 6
 
-export default function Walkthrough({ steps, open, onClose }: { steps: TourStep[]; open: boolean; onClose: () => void }) {
+export default function Walkthrough({ steps, open, onClose, onStep }: {
+  steps: TourStep[]
+  open: boolean
+  onClose: () => void
+  /** Prepare the UI for a step (e.g. open the panel and select its tab) before it is placed. */
+  onStep?: (step: TourStep) => void
+}) {
   const [i, setI] = useState(0)
   const [rect, setRect] = useState<Rect | null>(null)
   const cardRef = useRef<HTMLDivElement>(null)
+  const onStepRef = useRef(onStep)
+  onStepRef.current = onStep
 
   // Resolve the element for a step, skipping in `dir` over any that are not on screen. Returns
   // the resolved index and rect, or null when nothing from here on is resolvable.
@@ -41,14 +53,20 @@ export default function Walkthrough({ steps, open, onClose }: { steps: TourStep[
     return null
   }, [steps])
 
-  // On open, and whenever the step changes, place the spotlight. Skip missing anchors forward.
+  // On open, and whenever the step changes, prepare the UI for the step (open the panel, select
+  // its tab), then place the spotlight on the next frame once that render has landed. Skip
+  // anchors that are still absent forward.
   useLayoutEffect(() => {
     if (!open) return
-    const found = resolveFrom(i, 1)
-    if (!found) { onClose(); return }
-    if (found.idx !== i) { setI(found.idx); return }
-    setRect(found.r)
-  }, [open, i, resolveFrom, onClose])
+    onStepRef.current?.(steps[i])
+    const raf = requestAnimationFrame(() => {
+      const found = resolveFrom(i, 1)
+      if (!found) { onClose(); return }
+      if (found.idx !== i) { setI(found.idx); return }
+      setRect(found.r)
+    })
+    return () => cancelAnimationFrame(raf)
+  }, [open, i, resolveFrom, onClose, steps])
 
   // Keep the spotlight aligned through resizes.
   useEffect(() => {
@@ -63,11 +81,15 @@ export default function Walkthrough({ steps, open, onClose }: { steps: TourStep[
 
   useEffect(() => { if (open) cardRef.current?.focus() }, [open, i])
 
+  // Advance by one and let the placement effect prepare the UI (open the panel, select the tab)
+  // and only then skip anything still missing. Skipping here, before prep, would drop panel steps
+  // whenever the panel is collapsed.
   const go = useCallback((dir: 1 | -1) => {
-    const next = resolveFrom(i + dir, dir)
-    if (next) setI(next.idx)
-    else if (dir === 1) onClose()
-  }, [i, resolveFrom, onClose])
+    const target = i + dir
+    if (target < 0) return
+    if (target >= steps.length) { onClose(); return }
+    setI(target)
+  }, [i, steps.length, onClose])
 
   useEffect(() => {
     if (!open) return

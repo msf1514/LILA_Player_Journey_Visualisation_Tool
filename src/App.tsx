@@ -142,15 +142,18 @@ const MODE_HINT_TEXT: Record<'diff' | 'side', string> = {
   diff: 'Difference mode. Colour shows where traffic share rose or fell between the two selections, not raw counts.',
   side: 'Side by side. Two linked maps, panned and zoomed together, so you can compare them directly.',
 }
+// Ordered by impact, not by layout. The honest caveat comes first because a wrong reading of
+// this data is the costliest mistake; then the instruments that make the tool worth using; the
+// basics come last. Each step says what it is AND why it matters.
 const TOUR_STEPS: TourStep[] = [
-  { sel: '.app-canvas', title: 'The map', text: 'Aggregated player telemetry for the chosen map. Heat shows where people go; markers show events, and cluster when zoomed out.' },
-  { sel: '.panel-tabs', title: 'Layers', text: 'Turn data layers on and off: traffic, dwell, loot, kills, deaths, paths and more. The legend names every mark.' },
-  { sel: '.rail', title: 'Filter', text: 'Narrow to a map, a day, a single match, an actor type or event types. Active filters show as chips you can clear.' },
-  { sel: '.timeline', title: 'Timeline', text: 'Scrub or play match-elapsed time. The live-match count keeps a thinning late map from being misread as players going quiet.' },
-  { sel: '[data-tour="tab-hotspots"]', title: 'Hotspots', text: 'The densest clusters, ranked by share of traffic. Click one to see the journeys through it, then a single run.' },
-  { sel: '[aria-label="View mode"]', title: 'Compare', text: 'Put two views side by side, or show the difference in traffic share between two days, maps or actor types.' },
-  { sel: '.data-notes-btn', title: 'Data notes', text: 'What this data can and cannot show. Combat here is almost entirely against bots; read this before drawing conclusions.' },
-  { sel: '[data-tour="tab-insights"]', title: 'Insights', text: 'Findings computed from the data. Open one and it takes you to the view that proves it.' },
+  { sel: '.data-notes-btn', title: 'Start here: what this data shows', text: 'Combat is almost entirely against bots and there is barely any player-versus-player. Open data notes before drawing any conclusion, or you will read the wrong story.' },
+  { sel: '[data-tour="tab-hotspots"]', tab: 'hotspots', needsPanel: true, title: 'Hotspots', text: 'The densest areas, ranked, with two clicks from a cluster to one player’s route. This is what turns the map from a picture into an instrument.' },
+  { sel: '[data-tour="tab-insights"]', tab: 'insights', needsPanel: true, title: 'Insights', text: 'Findings read straight from the data. Click one and it opens the exact view that proves it, so the tool arrives with an opinion, not a blank map.' },
+  { sel: '[aria-label="View mode"]', title: 'Compare', text: 'Put two maps side by side, or show the difference in traffic share between two days, maps or actor types. Change is the question designers ask most.' },
+  { sel: '.timeline', title: 'Timeline', text: 'Scrub match-elapsed time. The live-match count keeps a thinning late map from being misread as players going quiet, when really most matches just ended.' },
+  { sel: '[data-tour="manage-data"]', title: 'Add your own data', text: 'Drop new telemetry files or register a new map, with no redeploy. It is a tool, not a viewer of three fixed maps.' },
+  { sel: '[data-tour="tab-layers"]', tab: 'layers', needsPanel: true, title: 'Layers', text: 'Turn traffic, dwell, loot, kills, deaths and paths on and off. The legend names every mark.' },
+  { sel: '.rail', title: 'Filter', text: 'Narrow to a map, day, match, actor or event. Every question starts by narrowing the data.' },
 ]
 
 const POSITION_EVENTS = ['Position', 'BotPosition']
@@ -266,6 +269,11 @@ function Workspace({
   const closeTour = () => {
     setTourOpen(false)
     try { localStorage.setItem(TOUR_KEY, '1') } catch { /* best effort */ }
+  }
+  // Prepare the UI for a tour step: open the panel and select its tab so its anchor exists.
+  const onTourStep = (step: TourStep) => {
+    if (step.needsPanel) setPanelOpen(true)
+    if (step.tab) setRightTab(step.tab)
   }
 
   // Fall back to the first map if the selected one is gone: removing added data can drop the
@@ -761,6 +769,7 @@ function Workspace({
                     <div role="tablist" aria-label="Panel" className="panel-tabs">
                       <button
                         type="button" role="tab" aria-selected={rightTab === 'layers'}
+                        data-tour="tab-layers"
                         data-tip="Turn data layers on and off. The legend names every mark."
                         className="panel-tab" onClick={() => setRightTab('layers')}
                       >
@@ -866,7 +875,7 @@ function Workspace({
         filtered={isFiltered(effective)}
       />
 
-      <Walkthrough steps={TOUR_STEPS} open={tourOpen} onClose={closeTour} />
+      <Walkthrough steps={TOUR_STEPS} open={tourOpen} onClose={closeTour} onStep={onTourStep} />
       <Tooltips />
     </div>
   )
