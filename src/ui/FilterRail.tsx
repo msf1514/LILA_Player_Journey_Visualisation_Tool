@@ -44,10 +44,10 @@ export default function FilterRail({ store, filter, onChange, eventCounts }: Fil
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, tip, children }: { title: string; tip?: string; children: React.ReactNode }) {
   return (
     <section className="rail-section">
-      <h2 className="rail-heading">{title}</h2>
+      <h2 className="rail-heading" data-tip={tip}>{title}</h2>
       <div className="rail-body">{children}</div>
     </section>
   )
@@ -69,7 +69,7 @@ function MapSection({ store, filter, set }: { store: Store; filter: Filter; set:
   }, [store])
 
   return (
-    <Section title="Map">
+    <Section title="Map" tip="Switch the map. Each map is a separate world with its own data.">
       <RadioList
         label="Map"
         options={store.meta.dict.maps.map((id) => ({
@@ -107,7 +107,7 @@ function DaySection({ store, filter, set }: { store: Store; filter: Filter; set:
   const selected = filter.dateFrom && filter.dateFrom === filter.dateTo ? filter.dateFrom : ALL_DAYS
 
   return (
-    <Section title="Day">
+    <Section title="Day" tip="Narrow to one day. Volume falls sharply across the five days, so this changes sample size a lot.">
       <RadioList
         label="Day"
         options={[
@@ -163,7 +163,7 @@ function MatchSection({ store, filter, set }: { store: Store; filter: Filter; se
   }
 
   return (
-    <Section title="Match">
+    <Section title="Match" tip="Focus a single match. Most matches hold one journey; the listed ones have several.">
       <input
         type="search"
         className="rail-input"
@@ -230,7 +230,7 @@ function MatchRow({
 
 function ActorSection({ filter, set }: { filter: Filter; set: (p: Partial<Filter>) => void }) {
   return (
-    <Section title="Actor">
+    <Section title="Actor" tip="Filter to humans, bots, or both. Almost all combat here is against bots.">
       <RadioList
         label="Actor"
         options={[
@@ -268,7 +268,7 @@ function EventSection({
   }
 
   return (
-    <Section title="Events">
+    <Section title="Events" tip="Choose which event types to show. Turning one off does not change the others’ counts.">
       {active && (
         <button type="button" className="rail-clear" onClick={() => set({ events: undefined })}>
           Show all event types

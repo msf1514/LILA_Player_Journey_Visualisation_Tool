@@ -46,7 +46,7 @@ export default function DataManager(props: DataManagerProps) {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        title="Add telemetry files or a new map"
+        data-tip="Add telemetry files or register a new map, with no redeploy."
       >
         Manage data{added && <span className="data-mgr-badge">{props.addedMaps.length + (props.addedRows ? 1 : 0)}</span>}
       </button>

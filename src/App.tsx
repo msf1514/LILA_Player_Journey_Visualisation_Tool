@@ -22,6 +22,7 @@ import CopyLink from './ui/CopyLink'
 import DataNotes from './ui/DataNotes'
 import DataManager from './ui/DataManager'
 import Walkthrough, { type TourStep } from './ui/Walkthrough'
+import Tooltips from './ui/Tooltips'
 import { useUrlState, readInitialState } from './ui/useUrlState'
 import type { ViewState } from './state/url'
 import FilterRail from './ui/FilterRail'
@@ -134,6 +135,13 @@ export default function App() {
 }
 
 const TOUR_KEY = 'lila.tour.done.v1'
+const PANEL_KEY = 'lila.panel.v1'
+const MODEHINT_KEY = 'lila.modehint.v1'
+const INSIGHTS_SEEN_KEY = 'lila.insights.seen.v1'
+const MODE_HINT_TEXT: Record<'diff' | 'side', string> = {
+  diff: 'Difference mode. Colour shows where traffic share rose or fell between the two selections, not raw counts.',
+  side: 'Side by side. Two linked maps, panned and zoomed together, so you can compare them directly.',
+}
 const TOUR_STEPS: TourStep[] = [
   { sel: '.app-canvas', title: 'The map', text: 'Aggregated player telemetry for the chosen map. Heat shows where people go; markers show events, and cluster when zoomed out.' },
   { sel: '.panel-tabs', title: 'Layers', text: 'Turn data layers on and off: traffic, dwell, loot, kills, deaths, paths and more. The legend names every mark.' },
@@ -195,11 +203,60 @@ function Workspace({
   // Right-hand panel: layers, or the hotspot drill-down. Selection is by cluster id (its peak
   // cell), which survives a re-rank; the run is one actor in one match.
   const [rightTab, setRightTab] = useState<'layers' | 'hotspots' | 'insights'>('layers')
+  // A quiet, one-time cue on the Insights tab, since it is the highest-value and least obvious
+  // panel. A small dot until the tab is first opened; no motion, no nagging.
+  const [insightsSeen, setInsightsSeen] = useState(() => {
+    try { return localStorage.getItem(INSIGHTS_SEEN_KEY) === '1' } catch { return false }
+  })
+  useEffect(() => {
+    if (rightTab === 'insights' && !insightsSeen) {
+      setInsightsSeen(true)
+      try { localStorage.setItem(INSIGHTS_SEEN_KEY, '1') } catch { /* best effort */ }
+    }
+  }, [rightTab, insightsSeen])
   const [selectedClusterId, setSelectedClusterId] = useState<number | null>(null)
   const [selectedRun, setSelectedRun] = useState<RunKey | null>(null)
+
+  // The left panel collapses so it stops covering the map, worst in side-by-side. Open/closed is
+  // remembered; default open on a first visit. Focus moves into the panel on open, back to the
+  // toggle on close.
+  const [panelOpen, setPanelOpenState] = useState(() => {
+    try { return localStorage.getItem(PANEL_KEY) !== 'closed' } catch { return true }
+  })
+  const panelRef = useRef<HTMLDivElement>(null)
+  const panelToggleRef = useRef<HTMLButtonElement>(null)
+  const panelMounted = useRef(false)
+  const setPanelOpen = (open: boolean) => {
+    setPanelOpenState(open)
+    try { localStorage.setItem(PANEL_KEY, open ? 'open' : 'closed') } catch { /* best effort */ }
+  }
+  useEffect(() => {
+    if (!panelMounted.current) { panelMounted.current = true; return }
+    if (panelOpen) panelRef.current?.focus()
+    else panelToggleRef.current?.focus()
+  }, [panelOpen])
   // Current zoom bucket (from the map canvas), so markers cluster when zoomed out and resolve to
   // individuals when zoomed in. Seeded below fit so the first paint is clustered.
   const [zoomBucket, setZoomBucket] = useState(-1)
+
+  // First-use mode explainer: the first time a comparison mode is opened, say what it does. Shown
+  // once per mode, dismissible, remembered so it never nags again.
+  const [modeHint, setModeHint] = useState<'diff' | 'side' | null>(null)
+  const modeHintDismissed = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    try { const raw = localStorage.getItem(MODEHINT_KEY); if (raw) modeHintDismissed.current = new Set(JSON.parse(raw)) } catch { /* ignore */ }
+  }, [])
+  useEffect(() => {
+    if ((compareMode === 'diff' || compareMode === 'side') && !modeHintDismissed.current.has(compareMode)) setModeHint(compareMode)
+    else setModeHint(null)
+  }, [compareMode])
+  const dismissModeHint = () => {
+    if (modeHint) {
+      modeHintDismissed.current.add(modeHint)
+      try { localStorage.setItem(MODEHINT_KEY, JSON.stringify([...modeHintDismissed.current])) } catch { /* best effort */ }
+    }
+    setModeHint(null)
+  }
 
   // First-run guided tour. Shows once, remembered in localStorage (guarded), re-openable.
   const [tourOpen, setTourOpen] = useState(false)
@@ -622,7 +679,7 @@ function Workspace({
             type="button"
             className="map-control tour-btn"
             onClick={() => setTourOpen(true)}
-            title="Take the tour"
+            data-tip="Replay the guided tour of the tool."
           >
             Tour
           </button>
@@ -673,52 +730,80 @@ function Workspace({
             onZoom={setZoomBucket}
           />
         </Suspense>
-        {compareMode === 'single' && (
-          <div className="left-stack">
-            <div role="tablist" aria-label="Panel" className="panel-tabs">
-              <button
-                type="button" role="tab" aria-selected={rightTab === 'layers'}
-                className="panel-tab" onClick={() => setRightTab('layers')}
+        {/* Collapsible left dock. Single mode carries the Layers / Hotspots / Insights tabs;
+            side-by-side carries Layers only (hotspots and insights are single-map). Collapsing
+            frees the whole map, which matters most in side-by-side. */}
+        {compareMode !== 'diff' && (
+          <div className="left-dock">
+            <button
+              ref={panelToggleRef}
+              type="button"
+              className="map-control panel-toggle"
+              aria-expanded={panelOpen}
+              aria-controls="left-panel"
+              data-tour="panel-toggle"
+              data-tip="Show or hide the layers panel so it stops covering the map."
+              onClick={() => setPanelOpen(!panelOpen)}
+            >
+              <span aria-hidden="true" className="panel-toggle-caret">{panelOpen ? '◂' : '▸'}</span>
+              Layers
+            </button>
+            {panelOpen && (
+              <div
+                id="left-panel"
+                ref={panelRef}
+                className="left-stack"
+                tabIndex={-1}
+                onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setPanelOpen(false) } }}
               >
-                Layers
-              </button>
-              <button
-                type="button" role="tab" aria-selected={rightTab === 'hotspots'}
-                data-tour="tab-hotspots"
-                className="panel-tab" onClick={() => setRightTab('hotspots')}
-              >
-                Hotspots
-              </button>
-              <button
-                type="button" role="tab" aria-selected={rightTab === 'insights'}
-                data-tour="tab-insights"
-                className="panel-tab" onClick={() => setRightTab('insights')}
-              >
-                Insights
-              </button>
-            </div>
-            {rightTab === 'layers' && <LayerPanel active={active} onToggle={toggle} counts={counts} />}
-            {rightTab === 'hotspots' && (
-              <Hotspots
-                store={store}
-                hotspots={hotspots}
-                selectedCluster={selectedCluster}
-                journeys={journeys}
-                selectedRun={selectedRun}
-                runDetail={runDetail}
-                onSelectCluster={selectCluster}
-                onSelectRun={setSelectedRun}
-              />
+                {compareMode === 'single' ? (
+                  <>
+                    <div role="tablist" aria-label="Panel" className="panel-tabs">
+                      <button
+                        type="button" role="tab" aria-selected={rightTab === 'layers'}
+                        data-tip="Turn data layers on and off. The legend names every mark."
+                        className="panel-tab" onClick={() => setRightTab('layers')}
+                      >
+                        Layers
+                      </button>
+                      <button
+                        type="button" role="tab" aria-selected={rightTab === 'hotspots'}
+                        data-tour="tab-hotspots"
+                        data-tip="The densest areas, ranked by share, with drill-down to single runs."
+                        className="panel-tab" onClick={() => setRightTab('hotspots')}
+                      >
+                        Hotspots
+                      </button>
+                      <button
+                        type="button" role="tab" aria-selected={rightTab === 'insights'}
+                        data-tour="tab-insights"
+                        data-tip="Findings computed from the data. Open one to jump to the view that shows it."
+                        className="panel-tab" onClick={() => setRightTab('insights')}
+                      >
+                        Insights
+                        {!insightsSeen && <span className="tab-dot" aria-hidden="true" />}
+                      </button>
+                    </div>
+                    {rightTab === 'layers' && <LayerPanel active={active} onToggle={toggle} counts={counts} />}
+                    {rightTab === 'hotspots' && (
+                      <Hotspots
+                        store={store}
+                        hotspots={hotspots}
+                        selectedCluster={selectedCluster}
+                        journeys={journeys}
+                        selectedRun={selectedRun}
+                        runDetail={runDetail}
+                        onSelectCluster={selectCluster}
+                        onSelectRun={setSelectedRun}
+                      />
+                    )}
+                    {rightTab === 'insights' && <Insights store={store} onApply={applyInsightView} />}
+                  </>
+                ) : (
+                  <LayerPanel active={active} onToggle={toggle} counts={counts} />
+                )}
+              </div>
             )}
-            {rightTab === 'insights' && <Insights store={store} onApply={applyInsightView} />}
-          </div>
-        )}
-        {/* Side-by-side keeps the Layers panel so a comparison can be built on any layer (dwell,
-            coverage, paths, markers), applied to both maps at once. Hotspots and insights are
-            single-map, so only Layers is shown here. */}
-        {compareMode === 'side' && (
-          <div className="left-stack">
-            <LayerPanel active={active} onToggle={toggle} counts={counts} />
           </div>
         )}
         {compareMode === 'diff' && (
@@ -733,6 +818,12 @@ function Workspace({
         {compareMode === 'diff' && <DiffNote comparing={comparing} diff={diff} />}
         {compareMode === 'side' && !comparing && (
           <div className="diff-note" role="status">Choose something to compare against, and the second map appears here.</div>
+        )}
+        {modeHint && (
+          <div className="mode-hint" role="status">
+            <span>{MODE_HINT_TEXT[modeHint]}</span>
+            <button type="button" className="map-control mode-hint-dismiss" onClick={dismissModeHint}>Got it</button>
+          </div>
         )}
         {dropped.length > 0 && (
           <div className="link-note" role="status">
@@ -776,6 +867,7 @@ function Workspace({
       />
 
       <Walkthrough steps={TOUR_STEPS} open={tourOpen} onClose={closeTour} />
+      <Tooltips />
     </div>
   )
 }

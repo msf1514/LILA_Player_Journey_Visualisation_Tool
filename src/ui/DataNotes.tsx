@@ -32,7 +32,7 @@ export default function DataNotes({ store }: { store: Store }) {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        title="What this data can and cannot show"
+        data-tip="What this data can and cannot show. Combat here is almost all against bots."
       >
         <span aria-hidden="true" className="data-notes-mark">i</span>
         Data notes

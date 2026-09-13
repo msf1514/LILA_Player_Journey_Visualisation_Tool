@@ -108,7 +108,7 @@ export default function Timeline({
           className="map-control tl-play"
           onClick={() => onPlay(!playing)}
           aria-label={playing ? 'Pause' : 'Play'}
-          title={playing ? 'Pause (space)' : 'Play (space)'}
+          data-tip="Play or pause the match-elapsed timeline (or press space)."
         >
           {playing ? '❚❚' : '▶'}
         </button>
@@ -180,7 +180,7 @@ export default function Timeline({
             type="button" role="radio" aria-checked={mode === 'cumulative'}
             tabIndex={mode === 'cumulative' ? 0 : -1}
             className="tl-mode" onClick={() => onMode('cumulative')}
-            title="Everything from match start up to this point"
+            data-tip="Everything from match start up to this point in the match."
           >
             Cumulative
           </button>
@@ -188,7 +188,7 @@ export default function Timeline({
             type="button" role="radio" aria-checked={mode === 'window'}
             tabIndex={mode === 'window' ? 0 : -1}
             className="tl-mode" onClick={() => onMode('window')}
-            title={`Only the ${WINDOW_S} seconds up to this point`}
+            data-tip={`Only the last ${WINDOW_S} seconds up to this point, so you see current activity.`}
           >
             Last {WINDOW_S}s
           </button>

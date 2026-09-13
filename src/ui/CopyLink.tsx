@@ -45,10 +45,10 @@ export default function CopyLink() {
         type="button"
         className="map-control copy-btn"
         onClick={copy}
-        aria-label="Copy a link to this view"
-        title="Copy a link to this view"
+        aria-label="Share this map: copy a link to this view"
+        data-tip="Copy a link that reopens this exact view, filters and all, to share it."
       >
-        {status === 'copied' ? 'Link copied' : 'Copy link'}
+        {status === 'copied' ? 'Link copied' : 'Share this map'}
       </button>
 
       {/* Polite, so it is announced without interrupting whatever is being read. */}

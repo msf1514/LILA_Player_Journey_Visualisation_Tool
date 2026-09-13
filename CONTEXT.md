@@ -491,6 +491,26 @@ one day; daily humans 98→80→59→47 across full-coverage days.
 
 ## 10. CHANGELOG (newest first)
 
+### 2026-09-13 - UX pass: collapsible panel, contextual help, audit tweaks
+- **Collapsible left panel.** The Layers/Hotspots/Insights stack now lives in a dock with a small
+  "Layers" toggle; collapsing frees the whole map (matters most in side-by-side). Open/closed is
+  remembered (`lila.panel.v1`); focus moves in on open, back to the toggle on close, Escape closes.
+- **Contextual per-control help.** New `src/ui/Tooltips.tsx`: one global helper showing a styled
+  explanation on BOTH hover and keyboard focus for any `data-tip` control (mode switches, compare
+  selects, tabs, share, manage data, data notes, tour, timeline play, cumulative/last-30s, map
+  switcher, filter groups). First switch to Difference or Side by side shows a one-line mode
+  explainer, once per mode, dismiss remembered (`lila.modehint.v1`).
+- **Audit tweaks (token-only):** "Copy link" -> "Share this map" (states the outcome, not the
+  mechanism); the Single/Difference/Side by side switch is now a framed segmented control with
+  readable inactive text (they were disabled-grey and looked unclickable, hiding compare); a
+  one-time accent dot on the Insights tab surfaces the highest-value, least-obvious panel without
+  motion (`lila.insights.seen.v1`). Okabe-Ito data palette and all other chrome tokens unchanged;
+  the map stays the loudest element.
+- Verified (Playwright, real GL): collapse/persist in single and side; tooltips on hover AND
+  focus; mode explainers show once and stay dismissed across reload; share rename; segmented
+  control; insights dot appears then persists dismissed. 106 tests pass, zero console errors, no
+  new dependency. Still to do: Change 4, rework the first-run tour by impact.
+
 ### 2026-09-13 - Side-by-side: layer toggles now work on both maps
 - Reported: comparing maps hid the Layers panel, so a dwell (or any non-traffic) comparison was
   impossible. Two causes: the panel only rendered in single mode, and side B (`layersB`) only

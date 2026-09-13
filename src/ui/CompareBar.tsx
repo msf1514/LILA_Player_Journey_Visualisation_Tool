@@ -40,14 +40,14 @@ export default function CompareBar({
   return (
     <div className="compare-bar">
       <div role="radiogroup" aria-label="View mode" className="tl-modes">
-        <ModeButton current={mode} value="single" onMode={onMode} title="One map">Single</ModeButton>
-        <ModeButton current={mode} value="diff" onMode={onMode} title="Colour shows what changed">Difference</ModeButton>
-        <ModeButton current={mode} value="side" onMode={onMode} title="Two maps, linked panning">Side by side</ModeButton>
+        <ModeButton current={mode} value="single" onMode={onMode} title="One map, with all your filters applied.">Single</ModeButton>
+        <ModeButton current={mode} value="diff" onMode={onMode} title="Colour shows where traffic share rose or fell between two selections, not raw counts.">Difference</ModeButton>
+        <ModeButton current={mode} value="side" onMode={onMode} title="Two linked maps, panned and zoomed together, to compare them directly.">Side by side</ModeButton>
       </div>
 
       {mode !== 'single' && (
         <>
-          <label className="compare-label">
+          <label className="compare-label" data-tip="Choose what the second view differs by: day, map, or actor type.">
             Compare by
             <select
               className="rail-input compare-select"
@@ -61,7 +61,7 @@ export default function CompareBar({
             </select>
           </label>
 
-          <label className="compare-label">
+          <label className="compare-label" data-tip="Pick the specific value to compare the current view against.">
             against
             <select
               className="rail-input compare-select"
@@ -122,7 +122,7 @@ function ModeButton({
       aria-checked={current === value}
       tabIndex={current === value ? 0 : -1}
       className="tl-mode"
-      title={title}
+      data-tip={title}
       onClick={() => onMode(value)}
     >
       {children}
