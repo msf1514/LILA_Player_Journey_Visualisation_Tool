@@ -139,7 +139,11 @@ function DataManagerPanel({
         {report && <IngestReport report={report} />}
 
         {/* ── Add a map ─────────────────────────────────────────────────────── */}
-        <AddMapForm existingIds={new Set([...store.meta.dict.maps])} onAdd={onAddMap} />
+        <AddMapForm
+          existingIds={new Set([...store.meta.dict.maps])}
+          onAdd={onAddMap}
+          suggestedMapId={report?.unknownMaps[0]}
+        />
 
         {/* ── Added so far ──────────────────────────────────────────────────── */}
         {(addedRows > 0 || addedMaps.length > 0) && (
@@ -183,7 +187,10 @@ function IngestReport({ report }: { report: IngestResult }) {
         ))}
       </dl>
       {report.unknownMaps.length > 0 && (
-        <p className="dn-secnote">Add these maps below to project their data instead of dropping it.</p>
+        <p className="dn-secnote">
+          These maps have no projection yet, so their rows were skipped. Add the map below to bring
+          that data in; the first id is filled in for you.
+        </p>
       )}
       {report.filesFailed.length > 0 && (
         <ul className="dm-failed">
@@ -197,7 +204,7 @@ function IngestReport({ report }: { report: IngestResult }) {
   )
 }
 
-function AddMapForm({ existingIds, onAdd }: { existingIds: Set<string>; onAdd: (m: AddedMap) => void }) {
+function AddMapForm({ existingIds, onAdd, suggestedMapId }: { existingIds: Set<string>; onAdd: (m: AddedMap) => void; suggestedMapId?: string }) {
   const [id, setId] = useState('')
   const [label, setLabel] = useState('')
   const [scale, setScale] = useState('')
@@ -206,6 +213,15 @@ function AddMapForm({ existingIds, onAdd }: { existingIds: Set<string>; onAdd: (
   const [version, setVersion] = useState('v1')
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
+
+  // Pre-fill the id from an import's first unknown map, unless the user has already typed one.
+  const lastSuggested = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (suggestedMapId && suggestedMapId !== lastSuggested.current) {
+      lastSuggested.current = suggestedMapId
+      setId((cur) => (cur ? cur : suggestedMapId))
+    }
+  }, [suggestedMapId])
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()

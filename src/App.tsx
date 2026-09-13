@@ -78,28 +78,33 @@ export default function App() {
     return new Store(bundle)
   }, [base, added])
 
+  // After adding data or a map, jump the view to it so the new data is visible, not silently
+  // merged behind the current map. Consumed and cleared by Workspace once the store has it.
+  const [focusMap, setFocusMap] = useState<string | null>(null)
+
   const onIngest = (result: IngestResult) => {
     if (!base) return
-    setAdded((prev) => {
-      // Only persist rows for genuinely new matches; re-dropping shipped or already-added data
-      // is a no-op at merge time, so keeping those rows would just bloat storage.
-      const known = new Set(base.meta.dict.matches)
-      for (const r of prev.rows) known.add(r.matchId)
-      const fresh = result.rows.filter((r) => !known.has(r.matchId))
-      if (!fresh.length) return prev
-      const next: PersistedData = { rows: [...prev.rows, ...fresh], maps: prev.maps }
-      void savePersisted(next)
-      return next
-    })
+    // Only keep rows for genuinely new matches; re-dropping shipped or added data is a no-op.
+    const known = new Set(base.meta.dict.matches)
+    for (const r of added.rows) known.add(r.matchId)
+    const fresh = result.rows.filter((r) => !known.has(r.matchId))
+    if (!fresh.length) return
+    // The map most of the new data belongs to, to switch to.
+    const counts = new Map<string, number>()
+    for (const r of fresh) counts.set(r.mapId, (counts.get(r.mapId) ?? 0) + 1)
+    const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null
+    const next: PersistedData = { rows: [...added.rows, ...fresh], maps: added.maps }
+    setAdded(next)
+    void savePersisted(next)
+    if (dominant) setFocusMap(dominant)
   }
 
   const onAddMap = (map: AddedMap) => {
     registerMinimap(map.id, map.minimap)
-    setAdded((prev) => {
-      const next: PersistedData = { rows: prev.rows, maps: [...prev.maps.filter((m) => m.id !== map.id), map] }
-      void savePersisted(next)
-      return next
-    })
+    const next: PersistedData = { rows: added.rows, maps: [...added.maps.filter((m) => m.id !== map.id), map] }
+    setAdded(next)
+    void savePersisted(next)
+    setFocusMap(map.id)
   }
 
   const onClearData = () => {
@@ -130,6 +135,8 @@ export default function App() {
       onIngest={onIngest}
       onAddMap={onAddMap}
       onClearData={onClearData}
+      focusMap={focusMap}
+      onFocusHandled={() => setFocusMap(null)}
     />
   )
 }
@@ -162,13 +169,15 @@ const KILL_EVENTS = new Set(['BotKill', 'Kill'])
 const DEATH_EVENTS = new Set(['BotKilled', 'Killed', 'KilledByStorm'])
 
 function Workspace({
-  store, added, onIngest, onAddMap, onClearData,
+  store, added, onIngest, onAddMap, onClearData, focusMap, onFocusHandled,
 }: {
   store: Store
   added: PersistedData
   onIngest: (r: IngestResult) => void
   onAddMap: (m: AddedMap) => void
   onClearData: () => void
+  focusMap: string | null
+  onFocusHandled: () => void
 }) {
   // File names already loaded, so re-dropping the same file is skipped by the parser.
   const existingFileNames = useMemo(() => new Set(added.rows.map((r) => r.file)), [added.rows])
@@ -286,6 +295,16 @@ function Workspace({
   useEffect(() => {
     if (filter.map && !maps.includes(filter.map)) setFilter((f) => ({ ...f, map: maps[0] }))
   }, [filter.map, maps])
+
+  // Jump to a map just added through the data manager, once the store carries it, so newly added
+  // data is shown rather than merged out of sight behind the current map.
+  useEffect(() => {
+    if (!focusMap) return
+    if (maps.includes(focusMap)) {
+      setFilter((f) => (f.map === focusMap ? f : { map: focusMap }))
+      onFocusHandled()
+    }
+  }, [focusMap, maps, onFocusHandled])
 
   /**
    * Axis length. Clamps to the chosen match's own duration when exactly one is selected, so
